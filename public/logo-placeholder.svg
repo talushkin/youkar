@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title desc">
+  <title id="title">YouKar logo placeholder</title>
+  <desc id="desc">Round badge placeholder for YouKar brand logo.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#2ec5ff"/>
+      <stop offset="60%" stop-color="#0f3f77"/>
+      <stop offset="100%" stop-color="#081f3f"/>
+    </radialGradient>
+  </defs>
+  <circle cx="320" cy="320" r="305" fill="#e93734"/>
+  <circle cx="320" cy="320" r="278" fill="url(#bg)" stroke="#d9f1ff" stroke-width="5"/>
+  <path d="M100 420 C200 520, 430 520, 540 420" fill="none" stroke="#ff5e55" stroke-width="18"/>
+  <circle cx="240" cy="295" r="58" fill="#ffd0c8"/>
+  <path d="M205 350 C225 390, 255 390, 275 350" fill="#1d2e57"/>
+  <rect x="155" y="410" width="170" height="110" rx="45" fill="#1f2f61"/>
+  <rect x="265" y="252" width="30" height="110" rx="15" fill="#dce8ff"/>
+  <circle cx="280" cy="235" r="28" fill="#dce8ff"/>
+  <path d="M300 280 L408 248 L455 306 L345 338 Z" fill="#ff3930"/>
+  <polygon points="370,270 427,300 370,330" fill="#ffffff"/>
+  <text x="320" y="170" text-anchor="middle" font-family="Montserrat, Arial, sans-serif" font-size="96" font-weight="700" fill="#e9f4ff">YOUKAR</text>
+  <text x="320" y="590" text-anchor="middle" font-family="Montserrat, Arial, sans-serif" font-size="58" font-weight="700" fill="#e9f4ff">KARAOKE</text>
+</svg>
