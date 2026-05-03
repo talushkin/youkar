@@ -47,11 +47,22 @@ export default function HomePage() {
 
       const data = await response.json();
       if (!response.ok) {
+        const failedUrl = data?.backendCall?.url || "(unknown)";
+        window.alert(
+          `Create Karaoke failed.\nBackend URL: ${failedUrl}\nError: ${data.error || "Unknown error"}`
+        );
         throw new Error(data.error || "Failed to create karaoke request");
       }
 
       setQueuedVideoId(data.queuedVideoId || videoId);
       setSongTitle(data.title || "YouTube song");
+
+      const beUrl = data?.backendCall?.url || "(unknown)";
+      const beMessage = data?.backend?.message || "No backend message";
+      window.alert(
+        `BE /api/pending call details:\nURL: ${beUrl}\nMethod: POST\nResult: ${beMessage}`
+      );
+
       setStatus({
         type: "success",
         message: "Karaoke request created. Continue to payment.",

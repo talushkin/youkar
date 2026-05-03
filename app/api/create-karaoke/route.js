@@ -73,7 +73,9 @@ export async function POST(request) {
       headers.Authorization = `Bearer ${bearer}`;
     }
 
-    const response = await fetch(`${apiBase}/api/pending`, {
+    const pendingUrl = `${apiBase}/api/pending`;
+
+    const response = await fetch(pendingUrl, {
       method: "POST",
       headers,
       body: JSON.stringify([entry]),
@@ -98,6 +100,11 @@ export async function POST(request) {
       queuedVideoId: videoId,
       title,
       backend: result,
+      backendCall: {
+        url: pendingUrl,
+        method: "POST",
+        hasBearer: Boolean(bearer),
+      },
     });
   } catch (error) {
     return NextResponse.json(
