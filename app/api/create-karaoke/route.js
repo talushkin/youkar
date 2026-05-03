@@ -74,11 +74,12 @@ export async function POST(request) {
     }
 
     const pendingUrl = `${apiBase}/api/pending`;
+    const pendingBody = JSON.stringify([entry]);
 
     const response = await fetch(pendingUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify([entry]),
+      body: pendingBody,
       cache: "no-store",
     });
 
@@ -95,15 +96,31 @@ export async function POST(request) {
 
     const result = await response.json();
 
+    let pendingContent = null;
+    try {
+      const pendingResponse = await fetch(pendingUrl, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      if (pendingResponse.ok) {
+        pendingContent = await pendingResponse.json();
+      }
+    } catch {
+      pendingContent = null;
+    }
+
     return NextResponse.json({
       ok: true,
       queuedVideoId: videoId,
       title,
       backend: result,
+      pendingContent,
       backendCall: {
         url: pendingUrl,
         method: "POST",
         hasBearer: Boolean(bearer),
+        body: pendingBody,
       },
     });
   } catch (error) {
