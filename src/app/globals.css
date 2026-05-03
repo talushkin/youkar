@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #1a2744;
+  --navy-dark: #0f1929;
+  --navy-mid: #162035;
+  --red: #e31221;
+  --red-dark: #b50e1a;
+}
+
+body {
+  background: var(--navy-dark);
+  color: #ffffff;
+  font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+}
+
+.gradient-header {
+  background: linear-gradient(135deg, #0f1929 0%, #1a2744 50%, #1e1f3a 100%);
+}
+
+.card-glass {
+  background: rgba(26, 39, 68, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-red {
+  background: linear-gradient(135deg, #e31221, #b50e1a);
+  transition: all 0.2s ease;
+}
+.btn-red:hover {
+  background: linear-gradient(135deg, #ff1a2e, #e31221);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(227, 18, 33, 0.4);
+}
+
+.input-field {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transition: border-color 0.2s;
+}
+.input-field:focus {
+  outline: none;
+  border-color: #e31221;
+  box-shadow: 0 0 0 2px rgba(227, 18, 33, 0.2);
+}
+.input-field::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.4s ease forwards; }
