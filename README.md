@@ -26,7 +26,7 @@ Copy `.env.example` to `.env.local` and set:
 - `NEXT_PUBLIC_RETURN_URL` (example: `https://youkar.vercel.app/after-payment`)
 - `BACKEND_BASE_URL` (example: `https://be-tan-theta.vercel.app`)
 - `BACKEND_CDN_PATH` (default: `/api/cdn-links`)
-- `BACKEND_SUBMIT_PATH` (default: `/api/submit-request`)
+- `BACKEND_SUBMIT_PATH` (default: `/api/wa/{phone}`)
 - `API_BEARER` (if backend requires bearer auth)
 
 ## API Endpoints In This App

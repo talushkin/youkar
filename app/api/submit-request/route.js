@@ -17,7 +17,7 @@ function extractVideoId(link) {
 
 function buildSubmitUrl() {
   const apiBase = process.env.BACKEND_BASE_URL || "https://be-tan-theta.vercel.app";
-  const submitPath = process.env.BACKEND_SUBMIT_PATH || "/api/submit-request";
+  const submitPath = process.env.BACKEND_SUBMIT_PATH || "/api/wa/{phone}";
 
   if (submitPath.startsWith("http://") || submitPath.startsWith("https://")) {
     return submitPath;
@@ -44,7 +44,10 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
     }
 
-    const submitUrl = buildSubmitUrl();
+    const submitUrlTemplate = buildSubmitUrl();
+    const submitUrl = submitUrlTemplate.includes("{phone}")
+      ? submitUrlTemplate.replace("{phone}", encodeURIComponent(normalizedPhone))
+      : `${submitUrlTemplate.replace(/\/$/, "")}/${encodeURIComponent(normalizedPhone)}`;
     const bearer = process.env.API_BEARER || "";
 
     const headers = { "Content-Type": "application/json" };
@@ -53,9 +56,9 @@ export async function POST(request) {
     }
 
     const payload = {
+      title: "YouKar Verification",
+      text: `Your request was received for video ${videoId}. We will update you here once karaoke is ready.`,
       phoneNumber: normalizedPhone,
-      phone: normalizedPhone,
-      whatsapp: normalizedPhone,
       youtubeUrl,
       videoId,
       source: "youkar-web",
