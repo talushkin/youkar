@@ -1,0 +1,244 @@
+/* ── Payment Page ── */
+.payment-page {
+  min-height: 100svh;
+  background: linear-gradient(135deg, #0d1b2a 0%, #1a2744 60%, #0d1b2a 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px 48px;
+  font-family: system-ui, 'Segoe UI', sans-serif;
+}
+
+/* ── Header ── */
+.payment-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 32px 16px 16px;
+  width: 100%;
+  max-width: 720px;
+  box-sizing: border-box;
+}
+
+.payment-logo {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 24px rgba(230, 57, 70, 0.5);
+  flex-shrink: 0;
+}
+
+.payment-header-text {
+  text-align: left;
+}
+
+.payment-title {
+  margin: 0;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(90deg, #fff 40%, #e63946 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.payment-subtitle {
+  margin: 4px 0 0;
+  font-size: 1rem;
+  color: #c9d1d9;
+  direction: rtl;
+}
+
+/* ── Hero ── */
+.payment-hero {
+  width: 100%;
+  max-width: 720px;
+  margin-top: 24px;
+}
+
+.payment-hero-content {
+  text-align: center;
+}
+
+.payment-hero-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+  direction: rtl;
+}
+
+.payment-hero-desc {
+  color: #c9d1d9;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  direction: rtl;
+  margin: 0 0 28px;
+}
+
+/* ── Steps ── */
+.payment-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 16px;
+  direction: rtl;
+}
+
+.step-num {
+  background: #e63946;
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.step-text {
+  font-size: 0.9rem;
+  color: #e0e6ed;
+}
+
+.step-arrow {
+  color: #e63946;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .step-arrow {
+    display: none;
+  }
+  .payment-steps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ── Payment Card ── */
+.payment-section {
+  width: 100%;
+  max-width: 480px;
+  margin-top: 32px;
+}
+
+.payment-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(230, 57, 70, 0.35);
+  border-radius: 20px;
+  padding: 36px 32px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 40px rgba(230, 57, 70, 0.08);
+}
+
+.payment-price {
+  margin-bottom: 24px;
+}
+
+.price-amount {
+  display: block;
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: #e63946;
+  line-height: 1;
+}
+
+.price-label {
+  display: block;
+  font-size: 1rem;
+  color: #c9d1d9;
+  margin-top: 6px;
+  direction: rtl;
+}
+
+.payment-features {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 28px;
+  text-align: right;
+  direction: rtl;
+}
+
+.feature {
+  font-size: 0.95rem;
+  color: #d1d8e0;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  border-left: 3px solid #e63946;
+}
+
+/* ── UPay form ── */
+.upay-form {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 16px;
+}
+
+.upay-btn {
+  cursor: pointer;
+  transition: transform 0.2s, filter 0.2s;
+  max-width: 220px;
+  height: auto;
+}
+
+.upay-btn:hover {
+  transform: scale(1.04);
+  filter: brightness(1.1);
+}
+
+.payment-secure {
+  font-size: 0.82rem;
+  color: #8b949e;
+  margin-top: 4px;
+}
+
+/* ── Already paid ── */
+.already-paid-section {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.already-paid-text {
+  color: #8b949e;
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+  direction: rtl;
+}
+
+.already-paid-btn {
+  background: transparent;
+  border: 1px solid rgba(230, 57, 70, 0.5);
+  color: #e63946;
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  direction: rtl;
+}
+
+.already-paid-btn:hover {
+  background: rgba(230, 57, 70, 0.12);
+  border-color: #e63946;
+}
