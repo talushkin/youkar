@@ -66,8 +66,13 @@ function extractVideoId(link) {
 }
 
 export default function HomePage() {
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const INPUT_ROW_INDEX = -1;
+  const [lang, setLang] = useState("he");
+  const [youtubeUrl, setYoutubeUrl] = useState("erik clepton");
+  const [songSearchResults, setSongSearchResults] = useState([]);
+  const [isSearchingSongs, setIsSearchingSongs] = useState(false);
+  const [showSongDropdown, setShowSongDropdown] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("972");
   const [waStatus, setWaStatus] = useState({ type: "idle", message: "" });
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isCreating, setIsCreating] = useState(false);
@@ -75,6 +80,10 @@ export default function HomePage() {
   const [waVerified, setWaVerified] = useState(false);
   const [queuedVideoId, setQueuedVideoId] = useState("");
   const [songTitle, setSongTitle] = useState("");
+  const [inputSongTitle, setInputSongTitle] = useState("");
+  const [inputKarUrl, setInputKarUrl] = useState("");
+  const [inputVocUrl, setInputVocUrl] = useState("");
+  const [loadingInputLinks, setLoadingInputLinks] = useState(false);
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
   const [activeSource, setActiveSource] = useState("mix");
   const [ytApiLoaded, setYtApiLoaded] = useState(false);
@@ -91,7 +100,50 @@ export default function HomePage() {
   const [syncDuration, setSyncDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const copy = {
+    he: {
+      headline: "כל לינק יוטיוב לקריוקי תוך כמה שניות!",
+      lead: "הדבקה, אימות ויצירת בקשה לקריוקי במהירות.",
+      step1: "1) לינק/חיפוש יוטיוב",
+      searchPlaceholder: "הדבק לינק יוטיוב או חפש שיר...",
+      searchLoading: "מחפש שירים...",
+      noResults: "לא נמצאו תוצאות",
+      invalidYoutube: "נא להכניס לינק YouTube תקין.",
+      phonePlaceholder: "מספר טלפון ל-WhatsApp (לדוגמה 972501234567)",
+      phoneInvalid: "נא להזין מספר טלפון תקין ל-WhatsApp.",
+      sendWa: "2) שלח WA",
+      sendingWa: "2) שולח...",
+      create: "3) צור קריוקי",
+      creating: "3) יוצר...",
+      createQuick: "צור קריוקי",
+      inputSongFallback: "שיר מהקלט",
+    },
+    en: {
+      headline: "Any YOUTUBE link to a karaoke playback in just a few sec!",
+      lead: "Paste, verify, and create your karaoke request in seconds.",
+      step1: "1) YouTube Song Link/Search",
+      searchPlaceholder: "Paste YouTube URL or search song title...",
+      searchLoading: "Searching songs...",
+      noResults: "No results found",
+      invalidYoutube: "Please use a valid YouTube URL.",
+      phonePlaceholder: "Phone number for WhatsApp (e.g. 972501234567)",
+      phoneInvalid: "Enter a valid phone number to send WhatsApp.",
+      sendWa: "2) Send WA",
+      sendingWa: "2) Sending...",
+      create: "3) Create Karaoke",
+      creating: "3) Creating...",
+      createQuick: "Create Karaoke",
+      inputSongFallback: "Input song",
+    },
+  };
+
+  const ui = copy[lang] || copy.he;
+
   const videoId = useMemo(() => extractVideoId(youtubeUrl), [youtubeUrl]);
+  const looksLikeUrl = useMemo(() => {
+    const value = youtubeUrl.trim().toLowerCase();
+    return value.startsWith("http") || value.includes("youtube.com") || value.includes("youtu.be");
+  }, [youtubeUrl]);
   const normalizedPhone = useMemo(
     () => phoneNumber.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
     [phoneNumber]
@@ -99,7 +151,14 @@ export default function HomePage() {
   const hasValidPhone = useMemo(() => /^\+?\d{8,15}$/.test(normalizedPhone), [normalizedPhone]);
   const canCreate = Boolean(videoId && !queuedVideoId && waVerified);
 
-  const activeExample = EXAMPLE_SONGS[activeExampleIndex];
+  const activeExample = activeExampleIndex === INPUT_ROW_INDEX
+    ? {
+      title: inputSongTitle || ui.inputSongFallback,
+      youtube: youtubeUrl,
+      karaoke: inputKarUrl,
+      vocals: inputVocUrl,
+    }
+    : EXAMPLE_SONGS[activeExampleIndex];
 
   const formatClock = (seconds) => {
     const safe = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -190,7 +249,7 @@ export default function HomePage() {
     const song = EXAMPLE_SONGS[songIndex];
     if (!song) return;
 
-    if (source === "mix" && !ytPlayerRef.current) {
+    if (source === "mix" && (!ytPlayerRef.current || !ytReady)) {
       return;
     }
 
@@ -230,6 +289,18 @@ export default function HomePage() {
   };
 
   const handleExamplePlay = (songIndex, source) => {
+    const isSameSelection =
+      songIndex === activeExampleIndex && source === activeSource;
+
+    if (isSameSelection) {
+      if (source === "mix" && !ytReady) {
+        pendingActionRef.current = { songIndex, source };
+        return;
+      }
+      togglePlayPause();
+      return;
+    }
+
     pendingActionRef.current = { songIndex, source };
     applyAction();
   };
@@ -332,6 +403,216 @@ export default function HomePage() {
     setIsPlaying(false);
   };
 
+  useEffect(() => {
+    const query = youtubeUrl.trim();
+    const shouldSearch = query.length >= 3 && !extractVideoId(query);
+
+    if (!shouldSearch) {
+      setSongSearchResults([]);
+      setShowSongDropdown(false);
+      setIsSearchingSongs(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setShowSongDropdown(true);
+      setIsSearchingSongs(true);
+      try {
+        const response = await fetch("/api/youtube/get-song-list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: query, artist: "", genre: "" }),
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Could not fetch song search list");
+        }
+
+        const nextResults = Array.isArray(data?.songs) ? data.songs.slice(0, 5) : [];
+        setSongSearchResults(nextResults);
+  setShowSongDropdown(true);
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return;
+        }
+        setSongSearchResults([]);
+        setShowSongDropdown(true);
+      } finally {
+        setIsSearchingSongs(false);
+      }
+    }, 1000);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [youtubeUrl]);
+
+  useEffect(() => {
+    if (!videoId) {
+      setInputSongTitle("");
+      setInputKarUrl("");
+      setInputVocUrl("");
+      setLoadingInputLinks(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const readTitle = async () => {
+      try {
+        const response = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+          { cache: "no-store" }
+        );
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setInputSongTitle(`YouTube ${videoId}`);
+          }
+          return;
+        }
+
+        const data = await response.json();
+        if (!cancelled) {
+          setInputSongTitle(data?.title || `YouTube ${videoId}`);
+        }
+      } catch {
+        if (!cancelled) {
+          setInputSongTitle(`YouTube ${videoId}`);
+        }
+      }
+    };
+
+    readTitle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId]);
+
+  useEffect(() => {
+    if (!videoId) {
+      setInputKarUrl("");
+      setInputVocUrl("");
+      setLoadingInputLinks(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadLinks = async () => {
+      setLoadingInputLinks(true);
+      try {
+        const response = await fetch(`/api/cdn-links?videoId=${encodeURIComponent(videoId)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Could not fetch CDN links");
+        }
+
+        const links = Array.isArray(data?.links) ? data.links : [];
+        const kar = links.find((item) => {
+          const label = String(item?.label || "").toLowerCase();
+          const url = String(item?.url || "").toLowerCase();
+          return label.includes("kar") || label.includes("kara") || url.includes("/karaoke") || url.includes("kar");
+        })?.url || "";
+
+        const voc = links.find((item) => {
+          const label = String(item?.label || "").toLowerCase();
+          const url = String(item?.url || "").toLowerCase();
+          return label.includes("voc") || label.includes("vocal") || url.includes("/vocals") || url.includes("voc");
+        })?.url || "";
+
+        if (!cancelled) {
+          setInputKarUrl(String(kar || ""));
+          setInputVocUrl(String(voc || ""));
+        }
+      } catch (error) {
+        if (!cancelled && error?.name !== "AbortError") {
+          setInputKarUrl("");
+          setInputVocUrl("");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingInputLinks(false);
+        }
+      }
+    };
+
+    loadLinks();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [videoId]);
+
+  const handleInputRowPlay = (source) => {
+    if (!videoId) return;
+
+    if (activeExampleIndex === INPUT_ROW_INDEX && activeSource === source) {
+      if (source === "mix" && !ytReady) return;
+      togglePlayPause();
+      return;
+    }
+
+    const baseTime = activeExampleIndex === INPUT_ROW_INDEX ? readCurrentTime() : 0;
+    updateSyncPosition(baseTime);
+    pauseCurrent();
+
+    setActiveExampleIndex(INPUT_ROW_INDEX);
+    setActiveSource(source);
+
+    if (source === "mix") {
+      playMixAtTime(videoId, sharedTimeRef.current);
+      return;
+    }
+
+    const nextSrc = source === "kar" ? inputKarUrl : inputVocUrl;
+    if (!audioRef.current || !nextSrc) {
+      setIsPlaying(false);
+      return;
+    }
+
+    audioRef.current.src = nextSrc;
+    audioRef.current.currentTime = sharedTimeRef.current;
+    audioRef.current.play().then(() => {
+      setIsPlaying(true);
+    }).catch(() => {
+      setIsPlaying(false);
+    });
+  };
+
+  const handleSongPick = (song) => {
+    const nextUrl = String(song?.youtubeUrl || "");
+    const nextVideoId = extractVideoId(nextUrl);
+
+    setYoutubeUrl(nextUrl);
+    if (nextVideoId) {
+      pauseCurrent();
+    }
+    setShowSongDropdown(false);
+    setSongSearchResults([]);
+    setWaVerified(false);
+    setWaStatus({ type: "idle", message: "" });
+    setQueuedVideoId("");
+    setStatus({ type: "idle", message: "" });
+  };
+
+  const getSongThumbnail = (song) => {
+    const url = String(song?.youtubeUrl || "");
+    const songVideoId = extractVideoId(url);
+    if (!songVideoId) return "";
+    return `https://i.ytimg.com/vi/${songVideoId}/mqdefault.jpg`;
+  };
+
   const onSyncSeek = (e) => {
     const next = Number(e.target.value) || 0;
     updateSyncPosition(next);
@@ -411,8 +692,7 @@ export default function HomePage() {
     }
   };
 
-  const submitCreate = async (e) => {
-    e.preventDefault();
+  const createKaraoke = async () => {
     if (!videoId) return;
     if (!waVerified) {
       setStatus({
@@ -472,19 +752,185 @@ export default function HomePage() {
     }
   };
 
+  const submitCreate = async (e) => {
+    e.preventDefault();
+    await createKaraoke();
+  };
+
   const returnUrl = queuedVideoId
     ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}`
     : returnUrlBase;
 
   return (
     <main className="page-bg">
-      <img className="brand-logo" src="/youkar-logo.png" alt="YouKar logo" />
-      <section className="card">
+      <section className={`card ${lang === "he" ? "lang-he" : "lang-en"}`}>
         <Script
           src="https://www.youtube.com/iframe_api"
           strategy="afterInteractive"
           onLoad={() => setYtApiLoaded(true)}
         />
+
+        <div className="lang-switch" role="group" aria-label="Language selector">
+          <button
+            type="button"
+            className={`lang-btn ${lang === "he" ? "is-active" : ""}`}
+            onClick={() => setLang("he")}
+          >
+            HE
+          </button>
+          <button
+            type="button"
+            className={`lang-btn ${lang === "en" ? "is-active" : ""}`}
+            onClick={() => setLang("en")}
+          >
+            EN
+          </button>
+        </div>
+
+        <img className="brand-logo" src="/youkar-logo.png" alt="YouKar logo" />
+
+        <h1>{ui.headline}</h1>
+        <p className="lead">{ui.lead}</p>
+
+        <form className="request-form" onSubmit={submitCreate} dir={lang === "he" ? "rtl" : "ltr"}>
+          <label htmlFor="youtube">{ui.step1}</label>
+          <div className="search-input-wrap">
+            <input
+              id="youtube"
+              type="text"
+              placeholder={ui.searchPlaceholder}
+              value={youtubeUrl}
+              onChange={(e) => {
+                const nextUrl = e.target.value;
+                const nextVideoId = extractVideoId(nextUrl);
+
+                setYoutubeUrl(nextUrl);
+                if (nextVideoId) {
+                  pauseCurrent();
+                }
+                setWaVerified(false);
+                setWaStatus({ type: "idle", message: "" });
+                setQueuedVideoId("");
+                setStatus({ type: "idle", message: "" });
+              }}
+              required
+            />
+
+            {showSongDropdown ? (
+              <div className="search-dropdown" role="listbox" aria-label="Song search suggestions">
+                {isSearchingSongs ? (
+                  <div className="search-dropdown-state">{ui.searchLoading}</div>
+                ) : null}
+
+                {!isSearchingSongs && songSearchResults.length === 0 ? (
+                  <div className="search-dropdown-state">{ui.noResults}</div>
+                ) : null}
+
+                {!isSearchingSongs && songSearchResults.length > 0
+                  ? songSearchResults.map((song) => (
+                    <button
+                      key={song.id}
+                      type="button"
+                      className="search-dropdown-item"
+                      onClick={() => handleSongPick(song)}
+                    >
+                      {getSongThumbnail(song) ? (
+                        <img
+                          src={getSongThumbnail(song)}
+                          alt="YouTube thumbnail"
+                          className="search-dropdown-thumb"
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <span className="search-dropdown-meta">
+                        <span className="search-dropdown-title">{song.title}</span>
+                        {song.artist ? (
+                          <span className="search-dropdown-sub">{song.artist}</span>
+                        ) : null}
+                      </span>
+                    </button>
+                  ))
+                  : null}
+              </div>
+            ) : null}
+          </div>
+
+          {isSearchingSongs ? (
+            <p className="field-hint">{ui.searchLoading}</p>
+          ) : null}
+
+          {youtubeUrl && !videoId && looksLikeUrl ? (
+            <p className="field-hint error">{ui.invalidYoutube}</p>
+          ) : null}
+
+          <div className="wa-row">
+            <input
+              type="tel"
+              inputMode="tel"
+              placeholder={ui.phonePlaceholder}
+              value={phoneNumber}
+              onChange={(e) => {
+                setPhoneNumber(e.target.value);
+                setWaVerified(false);
+                setWaStatus({ type: "idle", message: "" });
+                setStatus({ type: "idle", message: "" });
+              }}
+            />
+            <button
+              type="button"
+              className="wa-send-btn"
+              onClick={sendWhatsApp}
+              disabled={!videoId || !hasValidPhone || isSendingWa}
+              title="Send WhatsApp verification"
+              aria-label="Send WhatsApp verification"
+            >
+              <svg viewBox="0 0 24 24" className="wa-icon" aria-hidden="true">
+                <path
+                  d="M20 12a8 8 0 0 1-11.7 7l-4.3 1.2 1.4-4.1A8 8 0 1 1 20 12Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M9.4 8.9c.2-.5.5-.5.7-.5h.6c.2 0 .4.1.5.3l1 2c.1.2.1.4 0 .6l-.5.8c-.1.2-.1.4 0 .6.3.6.9 1.3 1.6 1.8.2.2.4.2.6.1l.8-.5c.2-.1.4-.1.6 0l2 1c.2.1.3.3.3.5v.6c0 .2 0 .5-.5.7-.5.2-1.8.6-3.8-.2-1.1-.4-2.3-1.3-3.3-2.3-1-1-1.9-2.2-2.3-3.3-.8-2-.4-3.3-.2-3.8Z"
+                  fill="currentColor"
+                />
+              </svg>
+              {isSendingWa ? ui.sendingWa : ui.sendWa}
+            </button>
+          </div>
+
+          {phoneNumber && !hasValidPhone ? (
+            <p className="field-hint error">{ui.phoneInvalid}</p>
+          ) : null}
+
+          {waStatus.type !== "idle" ? (
+            <p className={`field-hint ${waStatus.type}`}>{waStatus.message}</p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={!canCreate || isCreating}
+            className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
+          >
+            {isCreating ? ui.creating : ui.create}
+          </button>
+
+          {videoId ? (
+            <div className="preview-wrap">
+              <p className="preview-label">Clip preview</p>
+              <iframe
+                title="YouTube preview"
+                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          ) : null}
+        </form>
 
         <div className="examples-panel">
           <h2>Example Songs</h2>
@@ -499,6 +945,58 @@ export default function HomePage() {
                 </tr>
               </thead>
               <tbody>
+                {videoId && inputSongTitle ? (
+                  <tr className="input-song-row">
+                    <td>{inputSongTitle}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`mini-btn yt-btn ${
+                          activeExampleIndex === INPUT_ROW_INDEX && activeSource === "mix"
+                            ? "is-active"
+                            : ""
+                        }`}
+                        onClick={() => handleInputRowPlay("mix")}
+                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "mix"}
+                        title="Play input YouTube mix"
+                      >
+                        MIX
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`mini-btn karaoke-btn ${
+                          activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"
+                            ? "is-active"
+                            : ""
+                        }`}
+                        onClick={() => handleInputRowPlay("kar")}
+                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"}
+                        disabled={!inputKarUrl || loadingInputLinks}
+                        title="Play input karaoke"
+                      >
+                        KAR
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`mini-btn vocals-btn ${
+                          activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"
+                            ? "is-active"
+                            : ""
+                        }`}
+                        onClick={() => handleInputRowPlay("voc")}
+                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"}
+                        disabled={!inputVocUrl || loadingInputLinks}
+                        title="Play input vocals"
+                      >
+                        VOC
+                      </button>
+                    </td>
+                  </tr>
+                ) : null}
                 {EXAMPLE_SONGS.map((song, idx) => (
                     <tr
                       key={song.youtube}
@@ -596,108 +1094,6 @@ export default function HomePage() {
             />
           </div>
         </div>
-
-        <h1>Create Karaoke In 4 Steps</h1>
-        <p className="lead">
-          1) Paste YouTube link, 2) Preview clip, 3) Create karaoke, 4) Pay and
-          receive CDN download links.
-        </p>
-
-        <form className="request-form" onSubmit={submitCreate}>
-          <label htmlFor="youtube">YouTube Song Link</label>
-          <input
-            id="youtube"
-            type="url"
-            placeholder="https://www.youtube.com/watch?v=..."
-            value={youtubeUrl}
-            onChange={(e) => {
-              const nextUrl = e.target.value;
-              const nextVideoId = extractVideoId(nextUrl);
-
-              setYoutubeUrl(nextUrl);
-              if (nextVideoId) {
-                pauseCurrent();
-              }
-              setWaVerified(false);
-              setWaStatus({ type: "idle", message: "" });
-              setQueuedVideoId("");
-              setStatus({ type: "idle", message: "" });
-            }}
-            required
-          />
-
-          {youtubeUrl && !videoId ? (
-            <p className="field-hint error">Please use a valid YouTube URL.</p>
-          ) : null}
-
-          <div className="wa-row">
-            <input
-              type="tel"
-              inputMode="tel"
-              placeholder="Phone number for WhatsApp (e.g. +972501234567)"
-              value={phoneNumber}
-              onChange={(e) => {
-                setPhoneNumber(e.target.value);
-                setWaVerified(false);
-                setWaStatus({ type: "idle", message: "" });
-                setStatus({ type: "idle", message: "" });
-              }}
-            />
-            <button
-              type="button"
-              className="wa-send-btn"
-              onClick={sendWhatsApp}
-              disabled={!videoId || !hasValidPhone || isSendingWa}
-              title="Send WhatsApp verification"
-              aria-label="Send WhatsApp verification"
-            >
-              <svg viewBox="0 0 24 24" className="wa-icon" aria-hidden="true">
-                <path
-                  d="M20 12a8 8 0 0 1-11.7 7l-4.3 1.2 1.4-4.1A8 8 0 1 1 20 12Z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M9.4 8.9c.2-.5.5-.5.7-.5h.6c.2 0 .4.1.5.3l1 2c.1.2.1.4 0 .6l-.5.8c-.1.2-.1.4 0 .6.3.6.9 1.3 1.6 1.8.2.2.4.2.6.1l.8-.5c.2-.1.4-.1.6 0l2 1c.2.1.3.3.3.5v.6c0 .2 0 .5-.5.7-.5.2-1.8.6-3.8-.2-1.1-.4-2.3-1.3-3.3-2.3-1-1-1.9-2.2-2.3-3.3-.8-2-.4-3.3-.2-3.8Z"
-                  fill="currentColor"
-                />
-              </svg>
-              {isSendingWa ? "Sending..." : "Send WA"}
-            </button>
-          </div>
-
-          {phoneNumber && !hasValidPhone ? (
-            <p className="field-hint error">Enter a valid phone number to send WhatsApp.</p>
-          ) : null}
-
-          {waStatus.type !== "idle" ? (
-            <p className={`field-hint ${waStatus.type}`}>{waStatus.message}</p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={!canCreate || isCreating}
-            className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
-          >
-            {isCreating ? "Creating..." : "Create Karaoke"}
-          </button>
-
-          {videoId ? (
-            <div className="preview-wrap">
-              <p className="preview-label">Clip preview</p>
-              <iframe
-                title="YouTube preview"
-                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
-            </div>
-          ) : null}
-        </form>
 
         {status.type !== "idle" ? (
           <p className={`result ${status.type}`}>{status.message}</p>

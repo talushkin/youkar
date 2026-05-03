@@ -1,5 +1,70 @@
 import { NextResponse } from "next/server";
 
+function formatDuration(seconds) {
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total <= 0) return "Unknown";
+
+  const rounded = Math.floor(total);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const secs = rounded % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+async function getYouTubeMeta(videoId) {
+  const fallback = {
+    title: "YouTube song",
+    duration: "Unknown",
+  };
+
+  if (!videoId) return fallback;
+
+  try {
+    const infoResponse = await fetch(
+      `https://www.youtube.com/get_video_info?video_id=${encodeURIComponent(videoId)}&el=detailpage&hl=en`,
+      { cache: "no-store" }
+    );
+
+    if (infoResponse.ok) {
+      const raw = await infoResponse.text();
+      const parsed = new URLSearchParams(raw);
+      const playerResponseRaw = parsed.get("player_response");
+
+      if (playerResponseRaw) {
+        const playerResponse = JSON.parse(playerResponseRaw);
+        const title = playerResponse?.videoDetails?.title || fallback.title;
+        const duration = formatDuration(playerResponse?.videoDetails?.lengthSeconds);
+        return { title, duration };
+      }
+    }
+  } catch {
+    // Fallback to oEmbed below.
+  }
+
+  try {
+    const oembedResponse = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&format=json`,
+      { cache: "no-store" }
+    );
+    if (oembedResponse.ok) {
+      const data = await oembedResponse.json();
+      return {
+        title: data?.title || fallback.title,
+        duration: fallback.duration,
+      };
+    }
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+}
+
 function extractVideoId(link) {
   try {
     const url = new URL(link);
@@ -44,6 +109,9 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
     }
 
+    const normalizedYoutubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const videoMeta = await getYouTubeMeta(videoId);
+
     const submitUrlTemplate = buildSubmitUrl();
     const submitUrl = submitUrlTemplate.includes("{phone}")
       ? submitUrlTemplate.replace("{phone}", encodeURIComponent(normalizedPhone))
@@ -57,9 +125,9 @@ export async function POST(request) {
 
     const payload = {
       title: "YouKar Verification",
-      text: `Your request was received for video ${videoId}. We will update you here once karaoke is ready.`,
+      text: `✅ Your request was received.\n📞 Phone: ${normalizedPhone}\n🎵 Title: ${videoMeta.title}\n⏱️ Duration: ${videoMeta.duration}\n🔗 YouTube: ${normalizedYoutubeUrl}\n🎤 We will update you here once karaoke is ready.`,
       phoneNumber: normalizedPhone,
-      youtubeUrl,
+      youtubeUrl: normalizedYoutubeUrl,
       videoId,
       source: "youkar-web",
     };
