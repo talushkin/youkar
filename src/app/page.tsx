@@ -13,6 +13,8 @@ interface SongRequest {
 }
 
 const PRICE_PER_SONG = 10;
+const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/youkar-group";
+let idCounter = 100;
 
 const INITIAL_QUEUE: SongRequest[] = [
   { id: 1, singer: "עברי לידר", song: "אהבה גדולה", requester: "מיכל כ.", notes: "", status: "בתור" },
@@ -24,6 +26,7 @@ export default function Home() {
   const [form, setForm] = useState({ singer: "", song: "", requester: "", notes: "" });
   const [errors, setErrors] = useState<Partial<typeof form>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [paymentPending, setPaymentPending] = useState(false);
 
   const validate = () => {
     const e: Partial<typeof form> = {};
@@ -38,7 +41,7 @@ export default function Home() {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     const newReq: SongRequest = {
-      id: Date.now(),
+      id: ++idCounter,
       singer: form.singer.trim(),
       song: form.song.trim(),
       requester: form.requester.trim(),
@@ -105,6 +108,14 @@ export default function Home() {
           <div className="fade-in bg-green-800/80 border border-green-500/60 rounded-xl px-5 py-3 flex items-center gap-3">
             <span className="text-2xl">✅</span>
             <p className="text-green-100 font-semibold">הבקשה נשלחה בהצלחה! תוסיפו לתור 🎶</p>
+          </div>
+        )}
+
+        {/* ===== PAYMENT BANNER ===== */}
+        {paymentPending && (
+          <div className="fade-in bg-blue-800/80 border border-blue-500/60 rounded-xl px-5 py-3 flex items-center gap-3">
+            <span className="text-2xl">💳</span>
+            <p className="text-blue-100 font-semibold">מעבר לדף תשלום — בקרוב! 🚀</p>
           </div>
         )}
 
@@ -201,7 +212,7 @@ export default function Home() {
                 </div>
               </div>
               <button
-                onClick={() => alert("מעבר לדף תשלום - בקרוב!")}
+                onClick={() => { setPaymentPending(true); setTimeout(() => setPaymentPending(false), 3000); }}
                 className="btn-red w-full text-white font-bold py-3 rounded-xl text-base shadow-lg flex items-center justify-center gap-2"
               >
                 <span>💳</span> שלם עכשיו
@@ -220,7 +231,7 @@ export default function Home() {
                   <p className="text-white/50 text-xs mt-0.5">עדכונים, תאריכים ועוד</p>
                 </div>
                 <a
-                  href="https://chat.whatsapp.com/youkar-group"
+                  href={WHATSAPP_GROUP_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mr-auto bg-green-600 hover:bg-green-500 transition text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap"
@@ -290,7 +301,7 @@ export default function Home() {
             <span>· קבוצת WA קריוקי</span>
           </div>
           <p>© {new Date().getFullYear()} YouKar · כל הזכויות שמורות</p>
-          <a href="https://chat.whatsapp.com/youkar-group" target="_blank" rel="noopener noreferrer"
+          <a href={WHATSAPP_GROUP_URL} target="_blank" rel="noopener noreferrer"
             className="text-green-400/70 hover:text-green-400 transition flex items-center gap-1">
             💬 WhatsApp Group
           </a>
