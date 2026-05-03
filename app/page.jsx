@@ -67,8 +67,12 @@ function extractVideoId(link) {
 
 export default function HomePage() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [waStatus, setWaStatus] = useState({ type: "idle", message: "" });
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isCreating, setIsCreating] = useState(false);
+  const [isSendingWa, setIsSendingWa] = useState(false);
+  const [waVerified, setWaVerified] = useState(false);
   const [queuedVideoId, setQueuedVideoId] = useState("");
   const [songTitle, setSongTitle] = useState("");
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
@@ -88,7 +92,12 @@ export default function HomePage() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const videoId = useMemo(() => extractVideoId(youtubeUrl), [youtubeUrl]);
-  const canCreate = Boolean(videoId && !queuedVideoId);
+  const normalizedPhone = useMemo(
+    () => phoneNumber.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
+    [phoneNumber]
+  );
+  const hasValidPhone = useMemo(() => /^\+?\d{8,15}$/.test(normalizedPhone), [normalizedPhone]);
+  const canCreate = Boolean(videoId && !queuedVideoId && waVerified);
 
   const activeExample = EXAMPLE_SONGS[activeExampleIndex];
 
@@ -139,6 +148,27 @@ export default function HomePage() {
     }
   };
 
+  const ensureMixPlayback = () => {
+    const player = ytPlayerRef.current;
+    if (!player) return;
+
+    player.playVideo?.();
+
+    window.setTimeout(() => {
+      const playingState = window.YT?.PlayerState?.PLAYING;
+      const currentState = player.getPlayerState?.();
+
+      if (playingState !== undefined && currentState !== playingState) {
+        // Live browsers sometimes block unmuted autoplay; muted retry is more reliable.
+        player.mute?.();
+        player.playVideo?.();
+        window.setTimeout(() => {
+          player.unMute?.();
+        }, 450);
+      }
+    }, 160);
+  };
+
   const playMixAtTime = (nextVideoId, startSeconds) => {
     if (!ytPlayerRef.current || !nextVideoId) return;
 
@@ -148,7 +178,7 @@ export default function HomePage() {
     });
 
     window.setTimeout(() => {
-      ytPlayerRef.current?.playVideo?.();
+      ensureMixPlayback();
       setIsPlaying(true);
     }, 60);
   };
@@ -215,11 +245,13 @@ export default function HomePage() {
       height: "1",
       videoId: defaultVideoId,
       playerVars: {
+        enablejsapi: 1,
         controls: 0,
         autoplay: 1,
         modestbranding: 1,
         playsinline: 1,
         rel: 0,
+        origin: window.location.origin,
       },
       events: {
         onReady: () => {
@@ -306,7 +338,7 @@ export default function HomePage() {
 
     if (activeSource === "mix") {
       ytPlayerRef.current?.seekTo?.(next, true);
-      ytPlayerRef.current?.playVideo?.();
+      ensureMixPlayback();
       return;
     }
 
@@ -321,7 +353,7 @@ export default function HomePage() {
         ytPlayerRef.current?.pauseVideo?.();
         setIsPlaying(false);
       } else {
-        ytPlayerRef.current?.playVideo?.();
+        ensureMixPlayback();
         setIsPlaying(true);
       }
       return;
@@ -341,9 +373,54 @@ export default function HomePage() {
     });
   };
 
+  const sendWhatsApp = async () => {
+    if (!videoId || !hasValidPhone || isSendingWa) return;
+
+    setIsSendingWa(true);
+    setWaStatus({ type: "idle", message: "" });
+
+    try {
+      const response = await fetch("/api/submit-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: normalizedPhone,
+          youtubeUrl,
+          videoId,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Could not send WhatsApp request");
+      }
+
+      setWaVerified(true);
+      setWaStatus({
+        type: "success",
+        message: "WhatsApp verification sent successfully.",
+      });
+    } catch (error) {
+      setWaVerified(false);
+      setWaStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not send WhatsApp request",
+      });
+    } finally {
+      setIsSendingWa(false);
+    }
+  };
+
   const submitCreate = async (e) => {
     e.preventDefault();
     if (!videoId) return;
+    if (!waVerified) {
+      setStatus({
+        type: "error",
+        message: "Please verify WhatsApp first.",
+      });
+      return;
+    }
 
     setIsCreating(true);
     setStatus({ type: "idle", message: "" });
@@ -438,6 +515,7 @@ export default function HomePage() {
                           }`}
                         onClick={() => handleExamplePlay(idx, "mix")}
                           aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
+                        title="Play YouTube mix (original track)"
                       >
                         MIX
                       </button>
@@ -452,6 +530,7 @@ export default function HomePage() {
                           }`}
                         onClick={() => handleExamplePlay(idx, "kar")}
                           aria-pressed={idx === activeExampleIndex && activeSource === "kar"}
+                        title="Play karaoke instrumental"
                       >
                         KAR
                       </button>
@@ -466,6 +545,7 @@ export default function HomePage() {
                           }`}
                         onClick={() => handleExamplePlay(idx, "voc")}
                           aria-pressed={idx === activeExampleIndex && activeSource === "voc"}
+                        title="Play vocals only"
                       >
                         VOC
                       </button>
@@ -538,6 +618,8 @@ export default function HomePage() {
               if (nextVideoId) {
                 pauseCurrent();
               }
+              setWaVerified(false);
+              setWaStatus({ type: "idle", message: "" });
               setQueuedVideoId("");
               setStatus({ type: "idle", message: "" });
             }}
@@ -546,6 +628,53 @@ export default function HomePage() {
 
           {youtubeUrl && !videoId ? (
             <p className="field-hint error">Please use a valid YouTube URL.</p>
+          ) : null}
+
+          <div className="wa-row">
+            <input
+              type="tel"
+              inputMode="tel"
+              placeholder="Phone number for WhatsApp (e.g. +972501234567)"
+              value={phoneNumber}
+              onChange={(e) => {
+                setPhoneNumber(e.target.value);
+                setWaVerified(false);
+                setWaStatus({ type: "idle", message: "" });
+                setStatus({ type: "idle", message: "" });
+              }}
+            />
+            <button
+              type="button"
+              className="wa-send-btn"
+              onClick={sendWhatsApp}
+              disabled={!videoId || !hasValidPhone || isSendingWa}
+              title="Send WhatsApp verification"
+              aria-label="Send WhatsApp verification"
+            >
+              <svg viewBox="0 0 24 24" className="wa-icon" aria-hidden="true">
+                <path
+                  d="M20 12a8 8 0 0 1-11.7 7l-4.3 1.2 1.4-4.1A8 8 0 1 1 20 12Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M9.4 8.9c.2-.5.5-.5.7-.5h.6c.2 0 .4.1.5.3l1 2c.1.2.1.4 0 .6l-.5.8c-.1.2-.1.4 0 .6.3.6.9 1.3 1.6 1.8.2.2.4.2.6.1l.8-.5c.2-.1.4-.1.6 0l2 1c.2.1.3.3.3.5v.6c0 .2 0 .5-.5.7-.5.2-1.8.6-3.8-.2-1.1-.4-2.3-1.3-3.3-2.3-1-1-1.9-2.2-2.3-3.3-.8-2-.4-3.3-.2-3.8Z"
+                  fill="currentColor"
+                />
+              </svg>
+              {isSendingWa ? "Sending..." : "Send WA"}
+            </button>
+          </div>
+
+          {phoneNumber && !hasValidPhone ? (
+            <p className="field-hint error">Enter a valid phone number to send WhatsApp.</p>
+          ) : null}
+
+          {waStatus.type !== "idle" ? (
+            <p className={`field-hint ${waStatus.type}`}>{waStatus.message}</p>
           ) : null}
 
           <button

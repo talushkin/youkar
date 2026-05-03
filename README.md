@@ -26,9 +26,11 @@ Copy `.env.example` to `.env.local` and set:
 - `NEXT_PUBLIC_RETURN_URL` (example: `https://youkar.vercel.app/after-payment`)
 - `BACKEND_BASE_URL` (example: `https://be-tan-theta.vercel.app`)
 - `BACKEND_CDN_PATH` (default: `/api/cdn-links`)
+- `BACKEND_SUBMIT_PATH` (default: `/api/submit-request`)
 - `API_BEARER` (if backend requires bearer auth)
 
 ## API Endpoints In This App
 
 - `POST /api/create-karaoke`: adds a new item to backend pending queue.
+- `POST /api/submit-request`: sends WhatsApp/phone identification request to backend.
 - `GET /api/cdn-links?videoId=...`: fetches/normalizes CDN download links.

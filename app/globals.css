@@ -291,6 +291,27 @@ input[type="tel"] {
   padding: 12px 14px;
 }
 
+.wa-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.wa-send-btn {
+  margin-top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  background: linear-gradient(90deg, #1ea952, #24cc63);
+}
+
+.wa-icon {
+  width: 18px;
+  height: 18px;
+}
+
 input::placeholder {
   color: #d8e4ffb0;
 }
