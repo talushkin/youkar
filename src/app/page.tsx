@@ -10,14 +10,13 @@ interface SongRequest {
   requester: string;
   notes: string;
   status: "ממתין" | "בתור" | "הושמע";
-  timestamp: Date;
 }
 
 const PRICE_PER_SONG = 10;
 
 const INITIAL_QUEUE: SongRequest[] = [
-  { id: 1, singer: "עברי לידר", song: "אהבה גדולה", requester: "מיכל כ.", notes: "", status: "בתור", timestamp: new Date() },
-  { id: 2, singer: "אייל גולן", song: "בוא אלי", requester: "יוסי ל.", notes: "בבקשה מהר!", status: "ממתין", timestamp: new Date() },
+  { id: 1, singer: "עברי לידר", song: "אהבה גדולה", requester: "מיכל כ.", notes: "", status: "בתור" },
+  { id: 2, singer: "אייל גולן", song: "בוא אלי", requester: "יוסי ל.", notes: "בבקשה מהר!", status: "ממתין" },
 ];
 
 export default function Home() {
@@ -45,7 +44,6 @@ export default function Home() {
       requester: form.requester.trim(),
       notes: form.notes.trim(),
       status: "ממתין",
-      timestamp: new Date(),
     };
     setRequests(prev => [newReq, ...prev]);
     setForm({ singer: "", song: "", requester: "", notes: "" });
@@ -150,7 +148,7 @@ export default function Home() {
               {/* Requester */}
               <div>
                 <label className="block text-sm font-medium text-blue-200 mb-1">
-                  שם הבקשה מי <span className="text-[#e31221]">*</span>
+                  שם המבקש <span className="text-[#e31221]">*</span>
                 </label>
                 <input
                   type="text"
@@ -222,7 +220,7 @@ export default function Home() {
                   <p className="text-white/50 text-xs mt-0.5">עדכונים, תאריכים ועוד</p>
                 </div>
                 <a
-                  href="https://wa.me/"
+                  href="https://chat.whatsapp.com/youkar-group"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mr-auto bg-green-600 hover:bg-green-500 transition text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap"
@@ -292,7 +290,7 @@ export default function Home() {
             <span>· קבוצת WA קריוקי</span>
           </div>
           <p>© {new Date().getFullYear()} YouKar · כל הזכויות שמורות</p>
-          <a href="https://wa.me/" target="_blank" rel="noopener noreferrer"
+          <a href="https://chat.whatsapp.com/youkar-group" target="_blank" rel="noopener noreferrer"
             className="text-green-400/70 hover:text-green-400 transition flex items-center gap-1">
             💬 WhatsApp Group
           </a>

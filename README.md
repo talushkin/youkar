@@ -3,7 +3,7 @@
 עמוד בקשות ותשלום של יוקאר - קבוצת WA קריוקי
 
 ## Tech Stack
-- Next.js 14 (TypeScript)
+- Next.js 16 (TypeScript)
 - Tailwind CSS
 - RTL Hebrew UI
 
