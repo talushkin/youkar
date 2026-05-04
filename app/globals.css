@@ -542,6 +542,30 @@ button:disabled {
   margin-bottom: 0.4em;
 }
 
+.error-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.4em;
+  color: #ff6b6b;
+}
+
+.back-payment-btn {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  transition: background 0.15s;
+}
+
+.back-payment-btn:hover {
+  background: rgba(255, 107, 107, 0.3);
+}
+
 .yt-embed-wrap {
   position: relative;
   width: 100%;
