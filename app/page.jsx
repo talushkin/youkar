@@ -3,7 +3,6 @@
 import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const upayAction = "https://app.upay.co.il/API6/clientsecure/redirectpage.php";
 const returnUrlBase =
   process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
 
@@ -67,12 +66,18 @@ function extractVideoId(link) {
 
 export default function HomePage() {
   const INPUT_ROW_INDEX = -1;
-  const [lang, setLang] = useState("he");
+  const [lang, setLang] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("youkar-lang") || "he";
+    }
+    return "he";
+  });
   const [youtubeUrl, setYoutubeUrl] = useState("erik clepton");
   const [songSearchResults, setSongSearchResults] = useState([]);
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
   const [showSongDropdown, setShowSongDropdown] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState("972");
+  const [phoneAreaCode, setPhoneAreaCode] = useState("050");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [waStatus, setWaStatus] = useState({ type: "idle", message: "" });
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isCreating, setIsCreating] = useState(false);
@@ -113,7 +118,7 @@ export default function HomePage() {
 
   const copy = {
     he: {
-      headline: "כל לינק יוטיוב לקריוקי תוך כמה שניות!",
+      headline: "קריוקי לכל יוטיוב תוך שניות",
       lead: "הדבקה, אימות ויצירת בקשה לקריוקי במהירות.",
       step1: "1) לינק/חיפוש יוטיוב",
       searchPlaceholder: "הדבק לינק יוטיוב או חפש שיר...",
@@ -160,10 +165,10 @@ export default function HomePage() {
     return value.startsWith("http") || value.includes("youtube.com") || value.includes("youtu.be");
   }, [youtubeUrl]);
   const normalizedPhone = useMemo(
-    () => phoneNumber.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
-    [phoneNumber]
+    () => `972${phoneAreaCode.slice(1)}${phoneNumber}`.replace(/[^\d]/g, ""),
+    [phoneAreaCode, phoneNumber]
   );
-  const hasValidPhone = useMemo(() => /^\+?\d{8,15}$/.test(normalizedPhone), [normalizedPhone]);
+  const hasValidPhone = useMemo(() => phoneNumber.length === 7 && /^\d{7}$/.test(phoneNumber), [phoneNumber]);
   const canCreate = Boolean(videoId && !queuedVideoId && waVerified);
   const paymentEnabled = cdnFilesReady || isInPendingQueue;
   const currentPreviewVideoId = previewVideoId || videoId;
@@ -907,59 +912,9 @@ export default function HomePage() {
     ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}`
     : returnUrlBase;
 
-  const paymentPanel = queuedVideoId ? (
-    <div className="payment-panel">
-      <h2>Complete Payment</h2>
-      <p className="hint">You are paying for: {songTitle}</p>
-      {!paymentEnabled && (
-        <p className="field-hint pending">⏳ Verifying files and processing...</p>
-      )}
-      <a
-        href={`https://paypage.takbull.co.il/3qBo9?phone=${encodeURIComponent(phoneNumber)}&product_name1=${encodeURIComponent(`${songTitle} KARAOKE + VOCALS files`)}&product_price1=5&product_quantity1=1`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="takbull-payment-btn"
-        style={{ pointerEvents: paymentEnabled ? "auto" : "none", opacity: paymentEnabled ? 1 : 0.5 }}
-      >
-        Pay with Takbull
-      </a>
-      <form
-        name="upayform"
-        action={upayAction}
-        method="post"
-        className="upay-form"
-      >
-        <input type="hidden" value="ipadtal@gmail.com" name="email" />
-        <input type="hidden" value="5" name="amount" />
-        <input type="hidden" value={returnUrl} name="returnurl" />
-        <input type="hidden" value="" name="ipnurl" />
-        <input
-          type="hidden"
-          value={`קובץ סאונד ${queuedVideoId}`}
-          name="paymentdetails"
-        />
-        <input type="hidden" value="1" name="maxpayments" />
-        <input type="hidden" value="1" name="livesystem" />
-        <input type="hidden" value="" name="commissionreduction" />
-        <input type="hidden" value="1" name="createinvoiceandreceipt" />
-        <input type="hidden" value="0" name="createinvoice" />
-        <input type="hidden" value="0" name="createreceipt" />
-        <input type="hidden" value="UPAY" name="refername" />
-        <input type="hidden" value="EN" name="lang" />
-        <input type="hidden" value="NIS" name="currency" />
-
-        <input
-          type="image"
-          src="https://app.upay.co.il/BANKRESOURCES/UPAY/images/buttons/payment-button1EN.png"
-          name="submit"
-          alt="Make payments with upay"
-          disabled={!paymentEnabled}
-          className={paymentEnabled && videoId ? "payment-image-btn is-highlight" : "payment-image-btn"}
-          style={{ opacity: paymentEnabled ? 1 : 0.5, cursor: paymentEnabled ? "pointer" : "not-allowed" }}
-        />
-      </form>
-    </div>
-  ) : null;
+  const paymentIframeUrl = queuedVideoId
+    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}`
+    : null;
 
   return (
     <main className="page-bg">
@@ -974,14 +929,20 @@ export default function HomePage() {
           <button
             type="button"
             className={`lang-btn ${lang === "he" ? "is-active" : ""}`}
-            onClick={() => setLang("he")}
+            onClick={() => {
+              setLang("he");
+              localStorage.setItem("youkar-lang", "he");
+            }}
           >
             HE
           </button>
           <button
             type="button"
             className={`lang-btn ${lang === "en" ? "is-active" : ""}`}
-            onClick={() => setLang("en")}
+            onClick={() => {
+              setLang("en");
+              localStorage.setItem("youkar-lang", "en");
+            }}
           >
             EN
           </button>
@@ -1063,17 +1024,55 @@ export default function HomePage() {
             <p className="field-hint error">{ui.invalidYoutube}</p>
           ) : null}
 
-          <div className="wa-row">
-            <input
-              type="tel"
-              inputMode="tel"
-              placeholder={ui.phonePlaceholder}
-              value={phoneNumber}
+          <div className="wa-row" dir="ltr" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <select
+              value={phoneAreaCode}
               onChange={(e) => {
-                setPhoneNumber(e.target.value);
+                setPhoneAreaCode(e.target.value);
                 setWaVerified(false);
                 setWaStatus({ type: "idle", message: "" });
                 setStatus({ type: "idle", message: "" });
+              }}
+              style={{
+                width: "70px",
+                padding: "10px",
+                borderRadius: "8px",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                background: "rgba(5, 20, 43, 0.9)",
+                color: "#fff",
+                fontSize: "0.9rem",
+              }}
+            >
+              <option value="050">050</option>
+              <option value="051">051</option>
+              <option value="052">052</option>
+              <option value="053">053</option>
+              <option value="054">054</option>
+              <option value="055">055</option>
+              <option value="056">056</option>
+              <option value="057">057</option>
+              <option value="058">058</option>
+            </select>
+            <input
+              type="tel"
+              inputMode="numeric"
+              placeholder="7 digits"
+              maxLength="7"
+              value={phoneNumber}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 7);
+                setPhoneNumber(val);
+                setWaVerified(false);
+                setWaStatus({ type: "idle", message: "" });
+                setStatus({ type: "idle", message: "" });
+              }}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "8px",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                background: "rgba(5, 20, 43, 0.7)",
+                color: "#fff",
               }}
             />
             <button
@@ -1144,7 +1143,21 @@ export default function HomePage() {
           </div>
         </form>
 
-        {paymentPanel}
+        {paymentIframeUrl ? (
+          <iframe
+            src={paymentIframeUrl}
+            className="payment-panel"
+            style={{
+              border: "none",
+              width: "100%",
+              minHeight: "200px",
+              borderRadius: "12px",
+              background: "transparent",
+            }}
+            title="Payment Form"
+            sandbox="allow-forms allow-popups allow-same-origin"
+          />
+        ) : null}
 
         {currentPreviewVideoId ? (
           <div className="preview-wrap">

@@ -62,7 +62,12 @@ const copy = {
 };
 
 export default function AfterPaymentClient({ videoId, errorDescription, phone }) {
-  const [lang, setLang] = useState("he");
+  const [lang, setLang] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("youkar-lang") || "he";
+    }
+    return "he";
+  });
   const ui = copy[lang] || copy.en;
   const [status, setStatus] = useState({
     type: "pending",
@@ -192,14 +197,20 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
             <button
               type="button"
               className={`lang-btn ${lang === "he" ? "is-active" : ""}`}
-              onClick={() => setLang("he")}
+              onClick={() => {
+                setLang("he");
+                localStorage.setItem("youkar-lang", "he");
+              }}
             >
               HE
             </button>
             <button
               type="button"
               className={`lang-btn ${lang === "en" ? "is-active" : ""}`}
-              onClick={() => setLang("en")}
+              onClick={() => {
+                setLang("en");
+                localStorage.setItem("youkar-lang", "en");
+              }}
             >
               EN
             </button>
@@ -221,14 +232,20 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
           <button
             type="button"
             className={`lang-btn ${lang === "he" ? "is-active" : ""}`}
-            onClick={() => setLang("he")}
+            onClick={() => {
+              setLang("he");
+              localStorage.setItem("youkar-lang", "he");
+            }}
           >
             HE
           </button>
           <button
             type="button"
             className={`lang-btn ${lang === "en" ? "is-active" : ""}`}
-            onClick={() => setLang("en")}
+            onClick={() => {
+              setLang("en");
+              localStorage.setItem("youkar-lang", "en");
+            }}
           >
             EN
           </button>
