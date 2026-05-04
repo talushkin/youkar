@@ -2,21 +2,40 @@
 
 import { useEffect, useState } from "react";
 
-export default function AfterPaymentClient({ videoId }) {
+const CDN_BASE = "https://d23du7ibe4a1ni.cloudfront.net";
+
+export default function AfterPaymentClient({ videoId, errorDescription }) {
   const [status, setStatus] = useState({
-    type: "idle",
-    message: "Checking karaoke processing status...",
+    type: "pending",
+    message: "Payment confirmed! Preparing your karaoke files…",
   });
-  const [links, setLinks] = useState([]);
+  const [karaokeUrl, setKaraokeUrl] = useState("");
+  const [vocalsUrl, setVocalsUrl] = useState("");
+
+  const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
 
   useEffect(() => {
-    if (!videoId) {
+    if (isPaymentError) {
       setStatus({
         type: "error",
-        message: "Missing videoId in return URL. Start again from the home page.",
+        message: `Payment failed: ${errorDescription}`,
       });
       return;
     }
+
+    if (!videoId) {
+      setStatus({
+        type: "error",
+        message: "Missing video ID. Please return to the home page and try again.",
+      });
+      return;
+    }
+
+    // Optimistically set the known CDN pattern right away
+    const kar = `${CDN_BASE}/${videoId}/karaoke.mp3`;
+    const voc = `${CDN_BASE}/${videoId}/vocals.mp3`;
+    setKaraokeUrl(kar);
+    setVocalsUrl(voc);
 
     let stopped = false;
     let timer = null;
@@ -27,29 +46,41 @@ export default function AfterPaymentClient({ videoId }) {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || "Failed to load CDN links");
+          throw new Error(data.error || "Failed to check file status");
         }
 
         const receivedLinks = Array.isArray(data.links) ? data.links : [];
         if (receivedLinks.length > 0) {
-          setLinks(receivedLinks);
-          setStatus({ type: "success", message: "CDN files are ready." });
+          // Override with actual API links if returned
+          const karLink = receivedLinks.find((l) => {
+            const u = String(l?.url || "").toLowerCase();
+            return u.includes("karaoke") || u.includes("kar");
+          })?.url || kar;
+          const vocLink = receivedLinks.find((l) => {
+            const u = String(l?.url || "").toLowerCase();
+            return u.includes("vocals") || u.includes("voc");
+          })?.url || voc;
+
+          setKaraokeUrl(karLink);
+          setVocalsUrl(vocLink);
+          setStatus({ type: "success", message: "Your files are ready! 🎤" });
           return;
         }
 
-        setStatus({
-          type: "pending",
-          message: "Payment confirmed. Processing still running, retrying...",
-        });
-
         if (!stopped) {
+          setStatus({
+            type: "pending",
+            message: "Still processing… we'll update this page automatically.",
+          });
           timer = window.setTimeout(check, 7000);
         }
       } catch (err) {
-        setStatus({
-          type: "error",
-          message: err.message || "Could not fetch status",
-        });
+        if (!stopped) {
+          setStatus({
+            type: "error",
+            message: err.message || "Could not verify file status. Links are shown below anyway.",
+          });
+        }
       }
     };
 
@@ -57,32 +88,105 @@ export default function AfterPaymentClient({ videoId }) {
 
     return () => {
       stopped = true;
-      if (timer) {
-        window.clearTimeout(timer);
-      }
+      if (timer) window.clearTimeout(timer);
     };
-  }, [videoId]);
+  }, [videoId, isPaymentError]);
+
+  const ytEmbedUrl = videoId
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`
+    : "";
+
+  if (isPaymentError) {
+    return (
+      <main className="page-bg" dir="ltr">
+        <section className="card after-payment-card">
+          <h1 className="error-title">❌ Payment Failed</h1>
+          <p className={`result error`}>{errorDescription}</p>
+          <a href="/api/create-karaoke" className="back-payment-btn">
+            ← Return to Payment
+          </a>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main className="page-bg">
-      <section className="card">
-        <h1>Payment Complete</h1>
-        <p className="lead">Video ID: {videoId || "N/A"}</p>
+    <main className="page-bg" dir="ltr">
+      <section className="card after-payment-card">
+        <h1 className="thank-you-title">🎉 Thank You for Your Purchase!</h1>
+        <p className="lead">Your karaoke &amp; vocals files are being prepared below.</p>
 
-        <p className={`result ${status.type === "pending" ? "success" : status.type}`}>
+        {videoId && (
+          <div className="yt-embed-wrap">
+            <iframe
+              src={ytEmbedUrl}
+              title="Song preview"
+              className="yt-embed-iframe"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+
+        <p className={`result ${status.type === "pending" ? "info" : status.type}`}>
           {status.message}
         </p>
 
-        {links.length > 0 ? (
-          <div className="links-list">
-            <h2>Download Links</h2>
-            {links.map((item) => (
-              <a key={item.url} href={item.url} target="_blank" rel="noreferrer">
-                {item.label}
-              </a>
-            ))}
+        <div className="download-links">
+          <h2>Your Files</h2>
+
+          <div className="download-row">
+            <span className="download-label">🎵 Karaoke (no vocals)</span>
+            <div className="download-actions">
+              {karaokeUrl && (
+                <>
+                  <audio
+                    controls
+                    src={karaokeUrl}
+                    className="inline-audio"
+                    preload="none"
+                  />
+                  <a
+                    href={karaokeUrl}
+                    download
+                    className="download-btn"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download
+                  </a>
+                </>
+              )}
+            </div>
           </div>
-        ) : null}
+
+          <div className="download-row">
+            <span className="download-label">🎤 Vocals only</span>
+            <div className="download-actions">
+              {vocalsUrl && (
+                <>
+                  <audio
+                    controls
+                    src={vocalsUrl}
+                    className="inline-audio"
+                    preload="none"
+                  />
+                  <a
+                    href={vocalsUrl}
+                    download
+                    className="download-btn"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <a href="/" className="back-home-btn">← Create another karaoke</a>
       </section>
     </main>
   );

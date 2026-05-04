@@ -92,6 +92,8 @@ export default function HomePage() {
   const ytHostRef = useRef(null);
   const ytPlayerRef = useRef(null);
   const previewIframeRef = useRef(null);
+  const previewTimeRef = useRef(0);
+  const previewDurationRef = useRef(0);
   const audioRef = useRef(null);
   const createButtonRef = useRef(null);
   const createHintTimerRef = useRef(null);
@@ -104,6 +106,7 @@ export default function HomePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewVideoId, setPreviewVideoId] = useState("");
   const [previewNonce, setPreviewNonce] = useState(0);
+  const [previewMuted, setPreviewMuted] = useState(false);
   const [showCreateHint, setShowCreateHint] = useState(false);
 
   const copy = {
@@ -186,8 +189,11 @@ export default function HomePage() {
     setSyncDuration(safe);
   };
 
-  const autoplayPreview = (nextVideoId) => {
+  const autoplayPreview = (nextVideoId, startSeconds = 0, muted = false) => {
     if (!nextVideoId) return;
+    const safeStart = Math.max(0, Math.floor(Number(startSeconds) || 0));
+    previewTimeRef.current = safeStart;
+    setPreviewMuted(Boolean(muted));
     setPreviewVideoId(nextVideoId);
     setPreviewNonce((value) => value + 1);
     setIsPlaying(true);
@@ -210,6 +216,12 @@ export default function HomePage() {
   const mutePreviewIframe = () => {
     sendPreviewCommand("setVolume", [0]);
     sendPreviewCommand("mute");
+  };
+
+  const unmutePreviewIframe = () => {
+    setPreviewMuted(false);
+    sendPreviewCommand("unMute");
+    sendPreviewCommand("setVolume", [100]);
   };
 
   const promptCreateAction = () => {
@@ -307,9 +319,7 @@ export default function HomePage() {
       return;
     }
 
-    const switchingSong = songIndex !== activeExampleIndex;
-    const baseTime = switchingSong ? 0 : readCurrentTime();
-    updateSyncPosition(baseTime);
+    updateSyncPosition(0);
 
     pauseCurrent();
 
@@ -326,7 +336,7 @@ export default function HomePage() {
     } else if (audioRef.current) {
       const nextSrc = source === "kar" ? song.karaoke : song.vocals;
       audioRef.current.src = nextSrc;
-      audioRef.current.currentTime = sharedTimeRef.current;
+      audioRef.current.currentTime = 0;
       audioRef.current.play().then(() => {
         setIsPlaying(true);
       }).catch(() => {
@@ -339,7 +349,8 @@ export default function HomePage() {
 
   const handleExamplePlay = (songIndex, source) => {
     if (source === "kar" || source === "voc") {
-      mutePreviewIframe();
+      const nextVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
+      autoplayPreview(nextVideoId, 0, true);
     }
 
     if (source === "mix") {
@@ -351,6 +362,7 @@ export default function HomePage() {
         return;
       }
 
+      unmutePreviewIframe();
       pauseCurrent();
       setActiveExampleIndex(songIndex);
       setActiveSource("mix");
@@ -646,19 +658,24 @@ export default function HomePage() {
     }
 
     const sourceToPlay = source === "kar" ? "mix" : source;
+
+    if (source === "kar" || source === "voc") {
+      autoplayPreview(videoId, 0, true);
+    }
+
     if (activeExampleIndex === INPUT_ROW_INDEX && activeSource === sourceToPlay) {
       togglePlayPause();
       return;
     }
 
-    const baseTime = activeExampleIndex === INPUT_ROW_INDEX ? readCurrentTime() : 0;
-    updateSyncPosition(baseTime);
+    updateSyncPosition(0);
     pauseCurrent();
 
     setActiveExampleIndex(INPUT_ROW_INDEX);
     setActiveSource(sourceToPlay);
 
     if (sourceToPlay === "mix") {
+      unmutePreviewIframe();
       autoplayPreview(videoId);
       return;
     }
@@ -670,7 +687,7 @@ export default function HomePage() {
     }
 
     audioRef.current.src = nextSrc;
-    audioRef.current.currentTime = sharedTimeRef.current;
+    audioRef.current.currentTime = 0;
     audioRef.current.play().then(() => {
       setIsPlaying(true);
     }).catch(() => {
@@ -721,6 +738,7 @@ export default function HomePage() {
         sendPreviewCommand("pauseVideo");
         setIsPlaying(false);
       } else {
+        unmutePreviewIframe();
         sendPreviewCommand("playVideo");
         setIsPlaying(true);
       }
@@ -1020,7 +1038,7 @@ export default function HomePage() {
                 ref={previewIframeRef}
                 key={`${currentPreviewVideoId}-${previewNonce}`}
                 title="YouTube preview"
-                src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&enablejsapi=1`}
+                src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&controls=0&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&start=${Math.max(0, Math.floor(previewTimeRef.current || 0))}&mute=${previewMuted ? 1 : 0}&enablejsapi=1`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
@@ -1220,6 +1238,14 @@ export default function HomePage() {
           <div className="payment-panel">
             <h2>Complete Payment</h2>
             <p className="hint">You are paying for: {songTitle}</p>
+            <a
+              href={`https://paypage.takbull.co.il/3qBo9?phone=${encodeURIComponent(phoneNumber)}&product_name1=${encodeURIComponent(`${songTitle} KARAOKE + VOCALS files`)}&product_price1=5&product_quantity1=1`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="takbull-payment-btn"
+            >
+              Pay with Takbull
+            </a>
             <form
               name="upayform"
               action={upayAction}

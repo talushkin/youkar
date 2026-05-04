@@ -530,6 +530,119 @@ button:disabled {
   background: rgba(44, 183, 255, 0.28);
 }
 
+/* After-payment thank you page */
+.after-payment-card {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.thank-you-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.4em;
+}
+
+.yt-embed-wrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  margin: 18px 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.yt-embed-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 12px;
+}
+
+.download-links {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.download-links h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.download-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 198, 255, 0.35);
+  background: rgba(44, 183, 255, 0.08);
+}
+
+.download-label {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.download-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-audio {
+  flex: 1 1 200px;
+  min-width: 0;
+  height: 36px;
+}
+
+.download-btn {
+  display: inline-block;
+  padding: 7px 18px;
+  border-radius: 8px;
+  background: rgba(44, 183, 255, 0.22);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid rgba(124, 198, 255, 0.5);
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.download-btn:hover {
+  background: rgba(44, 183, 255, 0.4);
+}
+
+.back-home-btn {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: background 0.15s;
+}
+
+.back-home-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.result.info {
+  color: #7ce0ff;
+  background: rgba(44, 183, 255, 0.12);
+  border: 1px solid rgba(44, 183, 255, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
 @keyframes float-in {
   from {
     opacity: 0;
