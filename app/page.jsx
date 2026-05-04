@@ -557,8 +557,10 @@ export default function HomePage() {
   const handleInputRowPlay = (source) => {
     if (!videoId) return;
 
-    if (activeExampleIndex === INPUT_ROW_INDEX && activeSource === source) {
-      if (source === "mix" && !ytReady) return;
+    const sourceToPlay = source === "kar" && !inputKarUrl ? "mix" : source;
+
+    if (activeExampleIndex === INPUT_ROW_INDEX && activeSource === sourceToPlay) {
+      if (sourceToPlay === "mix" && !ytReady) return;
       togglePlayPause();
       return;
     }
@@ -568,14 +570,14 @@ export default function HomePage() {
     pauseCurrent();
 
     setActiveExampleIndex(INPUT_ROW_INDEX);
-    setActiveSource(source);
+    setActiveSource(sourceToPlay);
 
-    if (source === "mix") {
+    if (sourceToPlay === "mix") {
       playMixAtTime(videoId, sharedTimeRef.current);
       return;
     }
 
-    const nextSrc = source === "kar" ? inputKarUrl : inputVocUrl;
+    const nextSrc = sourceToPlay === "kar" ? inputKarUrl : inputVocUrl;
     if (!audioRef.current || !nextSrc) {
       setIsPlaying(false);
       return;
@@ -967,14 +969,16 @@ export default function HomePage() {
                       <button
                         type="button"
                         className={`mini-btn karaoke-btn ${
-                          activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"
+                          activeExampleIndex === INPUT_ROW_INDEX
+                          && (activeSource === "kar" || (activeSource === "mix" && !inputKarUrl))
                             ? "is-active"
                             : ""
                         }`}
                         onClick={() => handleInputRowPlay("kar")}
-                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"}
-                        disabled={!inputKarUrl || loadingInputLinks}
-                        title="Play input karaoke"
+                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX
+                          && (activeSource === "kar" || (activeSource === "mix" && !inputKarUrl))}
+                        disabled={loadingInputLinks || !videoId}
+                        title={inputKarUrl ? "Play input karaoke" : "Play input YouTube mix"}
                       >
                         KAR
                       </button>
