@@ -91,7 +91,10 @@ export default function HomePage() {
 
   const ytHostRef = useRef(null);
   const ytPlayerRef = useRef(null);
+  const previewIframeRef = useRef(null);
   const audioRef = useRef(null);
+  const createButtonRef = useRef(null);
+  const createHintTimerRef = useRef(null);
   const pendingActionRef = useRef(null);
   const sharedTimeRef = useRef(0);
 
@@ -99,6 +102,9 @@ export default function HomePage() {
   const [syncSeconds, setSyncSeconds] = useState(0);
   const [syncDuration, setSyncDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [previewVideoId, setPreviewVideoId] = useState("");
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const [showCreateHint, setShowCreateHint] = useState(false);
 
   const copy = {
     he: {
@@ -150,6 +156,7 @@ export default function HomePage() {
   );
   const hasValidPhone = useMemo(() => /^\+?\d{8,15}$/.test(normalizedPhone), [normalizedPhone]);
   const canCreate = Boolean(videoId && !queuedVideoId && waVerified);
+  const currentPreviewVideoId = previewVideoId || videoId;
 
   const activeExample = activeExampleIndex === INPUT_ROW_INDEX
     ? {
@@ -177,6 +184,49 @@ export default function HomePage() {
   const updateSyncDuration = (duration) => {
     const safe = Math.max(0, Number(duration) || 0);
     setSyncDuration(safe);
+  };
+
+  const autoplayPreview = (nextVideoId) => {
+    if (!nextVideoId) return;
+    setPreviewVideoId(nextVideoId);
+    setPreviewNonce((value) => value + 1);
+    setIsPlaying(true);
+  };
+
+  const sendPreviewCommand = (func, args = []) => {
+    const iframeWindow = previewIframeRef.current?.contentWindow;
+    if (!iframeWindow) return;
+
+    iframeWindow.postMessage(
+      JSON.stringify({
+        event: "command",
+        func,
+        args,
+      }),
+      "*"
+    );
+  };
+
+  const mutePreviewIframe = () => {
+    sendPreviewCommand("setVolume", [0]);
+    sendPreviewCommand("mute");
+  };
+
+  const promptCreateAction = () => {
+    setShowCreateHint(true);
+    if (createHintTimerRef.current) {
+      window.clearTimeout(createHintTimerRef.current);
+    }
+
+    createHintTimerRef.current = window.setTimeout(() => {
+      setShowCreateHint(false);
+      createHintTimerRef.current = null;
+    }, 2400);
+
+    if (canCreate && createButtonRef.current) {
+      createButtonRef.current.focus();
+      createButtonRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   };
 
   const readCurrentTime = () => {
@@ -268,12 +318,11 @@ export default function HomePage() {
 
     if (source === "mix") {
       const nextVideoId = extractVideoId(song.youtube);
-      if (ytPlayerRef.current && nextVideoId) {
-        playMixAtTime(nextVideoId, sharedTimeRef.current);
-      }
+      autoplayPreview(nextVideoId);
       if (audioRef.current) {
         audioRef.current.pause();
       }
+      setIsPlaying(true);
     } else if (audioRef.current) {
       const nextSrc = source === "kar" ? song.karaoke : song.vocals;
       audioRef.current.src = nextSrc;
@@ -289,6 +338,19 @@ export default function HomePage() {
   };
 
   const handleExamplePlay = (songIndex, source) => {
+    if (source === "kar" || source === "voc") {
+      mutePreviewIframe();
+    }
+
+    if (source === "mix") {
+      pauseCurrent();
+      setActiveExampleIndex(songIndex);
+      setActiveSource("mix");
+      const mixVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
+      autoplayPreview(mixVideoId);
+      return;
+    }
+
     const isSameSelection =
       songIndex === activeExampleIndex && source === activeSource;
 
@@ -453,6 +515,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!videoId) {
+      setPreviewVideoId("");
       setInputSongTitle("");
       setInputKarUrl("");
       setInputVocUrl("");
@@ -493,6 +556,14 @@ export default function HomePage() {
       cancelled = true;
     };
   }, [videoId]);
+
+  useEffect(() => {
+    return () => {
+      if (createHintTimerRef.current) {
+        window.clearTimeout(createHintTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!videoId) {
@@ -557,7 +628,15 @@ export default function HomePage() {
   const handleInputRowPlay = (source) => {
     if (!videoId) return;
 
-    const sourceToPlay = source === "kar" && !inputKarUrl ? "mix" : source;
+    if (source === "kar" || source === "voc") {
+      mutePreviewIframe();
+      promptCreateAction();
+    }
+
+    const sourceToPlay = source === "kar" ? "mix" : source;
+    if (sourceToPlay === "mix") {
+      autoplayPreview(videoId);
+    }
 
     if (activeExampleIndex === INPUT_ROW_INDEX && activeSource === sourceToPlay) {
       if (sourceToPlay === "mix" && !ytReady) return;
@@ -573,7 +652,7 @@ export default function HomePage() {
     setActiveSource(sourceToPlay);
 
     if (sourceToPlay === "mix") {
-      playMixAtTime(videoId, sharedTimeRef.current);
+      autoplayPreview(videoId);
       return;
     }
 
@@ -620,8 +699,7 @@ export default function HomePage() {
     updateSyncPosition(next);
 
     if (activeSource === "mix") {
-      ytPlayerRef.current?.seekTo?.(next, true);
-      ensureMixPlayback();
+      sendPreviewCommand("seekTo", [next, true]);
       return;
     }
 
@@ -633,10 +711,10 @@ export default function HomePage() {
   const togglePlayPause = () => {
     if (activeSource === "mix") {
       if (isPlaying) {
-        ytPlayerRef.current?.pauseVideo?.();
+        sendPreviewCommand("pauseVideo");
         setIsPlaying(false);
       } else {
-        ensureMixPlayback();
+        sendPreviewCommand("playVideo");
         setIsPlaying(true);
       }
       return;
@@ -912,20 +990,30 @@ export default function HomePage() {
             <p className={`field-hint ${waStatus.type}`}>{waStatus.message}</p>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={!canCreate || isCreating}
-            className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
-          >
-            {isCreating ? ui.creating : ui.create}
-          </button>
+          <div className={`create-cta-wrap ${showCreateHint ? "is-aimed" : ""}`}>
+            {showCreateHint ? (
+              <p className="create-cta-hint" aria-live="polite">
+                -&gt; {ui.create}
+              </p>
+            ) : null}
+            <button
+              ref={createButtonRef}
+              type="submit"
+              disabled={!canCreate || isCreating}
+              className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
+            >
+              {isCreating ? ui.creating : ui.create}
+            </button>
+          </div>
 
-          {videoId ? (
+          {currentPreviewVideoId ? (
             <div className="preview-wrap">
               <p className="preview-label">Clip preview</p>
               <iframe
+                ref={previewIframeRef}
+                key={`${currentPreviewVideoId}-${previewNonce}`}
                 title="YouTube preview"
-                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&enablejsapi=1`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
@@ -949,7 +1037,16 @@ export default function HomePage() {
               <tbody>
                 {videoId && inputSongTitle ? (
                   <tr className="input-song-row">
-                    <td>{inputSongTitle}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="mini-btn yt-btn"
+                        onClick={() => handleInputRowPlay("mix")}
+                        title="Play input YouTube mix"
+                      >
+                        {inputSongTitle}
+                      </button>
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -978,7 +1075,7 @@ export default function HomePage() {
                         aria-pressed={activeExampleIndex === INPUT_ROW_INDEX
                           && (activeSource === "kar" || (activeSource === "mix" && !inputKarUrl))}
                         disabled={loadingInputLinks || !videoId}
-                        title={inputKarUrl ? "Play input karaoke" : "Play input YouTube mix"}
+                        title="Play input YouTube mix"
                       >
                         KAR
                       </button>
@@ -1006,7 +1103,16 @@ export default function HomePage() {
                       key={song.youtube}
                       className={idx === activeExampleIndex ? "is-active-row" : ""}
                     >
-                    <td>{song.title}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="mini-btn yt-btn"
+                        onClick={() => handleExamplePlay(idx, "mix")}
+                        title="Play YouTube mix (original track)"
+                      >
+                        {song.title}
+                      </button>
+                    </td>
                     <td>
                       <button
                         type="button"
