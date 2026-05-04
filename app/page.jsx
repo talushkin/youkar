@@ -874,29 +874,11 @@ export default function HomePage() {
 
       const data = await response.json();
       if (!response.ok) {
-        const failedUrl = data?.backendCall?.url || "(unknown)";
-        const failedBody = data?.backendCall?.body || "(unknown)";
-        const failedPendingContent = JSON.stringify(
-          data?.pendingContent ?? null,
-          null,
-          2
-        );
-        window.alert(
-          `Create Karaoke failed.\nBackend URL: ${failedUrl}\nMethod: POST\nBody: ${failedBody}\nPending JSON: ${failedPendingContent}\nError: ${data.error || "Unknown error"}`
-        );
         throw new Error(data.error || "Failed to create karaoke request");
       }
 
       setQueuedVideoId(data.queuedVideoId || videoId);
       setSongTitle(data.title || "YouTube song");
-
-      const beUrl = data?.backendCall?.url || "(unknown)";
-      const beBody = data?.backendCall?.body || "(unknown)";
-      const beMessage = data?.backend?.message || "No backend message";
-      const pendingContent = JSON.stringify(data?.pendingContent ?? null, null, 2);
-      window.alert(
-        `BE /api/pending call details:\nURL: ${beUrl}\nMethod: POST\nBody: ${beBody}\nResult: ${beMessage}\nPending JSON: ${pendingContent}`
-      );
 
       setStatus({
         type: "success",
