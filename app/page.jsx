@@ -343,6 +343,14 @@ export default function HomePage() {
     }
 
     if (source === "mix") {
+      const isSameMixSelection =
+        songIndex === activeExampleIndex && activeSource === "mix";
+
+      if (isSameMixSelection) {
+        togglePlayPause();
+        return;
+      }
+
       pauseCurrent();
       setActiveExampleIndex(songIndex);
       setActiveSource("mix");
@@ -628,18 +636,17 @@ export default function HomePage() {
   const handleInputRowPlay = (source) => {
     if (!videoId) return;
 
-    if (source === "kar" || source === "voc") {
+    if (source === "voc") {
       mutePreviewIframe();
       promptCreateAction();
     }
 
-    const sourceToPlay = source === "kar" ? "mix" : source;
-    if (sourceToPlay === "mix") {
-      autoplayPreview(videoId);
+    if (source === "kar") {
+      promptCreateAction();
     }
 
+    const sourceToPlay = source === "kar" ? "mix" : source;
     if (activeExampleIndex === INPUT_ROW_INDEX && activeSource === sourceToPlay) {
-      if (sourceToPlay === "mix" && !ytReady) return;
       togglePlayPause();
       return;
     }
