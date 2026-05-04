@@ -1,31 +1,7 @@
 import { NextResponse } from "next/server";
 
-function normalizeLinks(payload) {
-  const links = [];
-
-  if (!payload) return links;
-
-  const source = payload.links || payload.files || payload.data?.links || payload.data?.files;
-
-  if (Array.isArray(source)) {
-    for (const item of source) {
-      const url = item?.url || item?.link || item?.cdn;
-      if (!url) continue;
-      links.push({
-        label: item?.label || item?.name || "Download file",
-        url,
-      });
-    }
-    return links;
-  }
-
-  const voc = payload.voc || payload.data?.voc;
-  const kar = payload.kar || payload.data?.kar;
-
-  if (voc) links.push({ label: "Vocals", url: voc });
-  if (kar) links.push({ label: "Karaoke", url: kar });
-
-  return links;
+function sanitizePrefixPart(value) {
+  return String(value || "tracks").replace(/^\/+|\/+$/g, "");
 }
 
 export async function GET(request) {
@@ -38,8 +14,15 @@ export async function GET(request) {
     }
 
     const apiBase = process.env.BACKEND_BASE_URL || "https://be-tan-theta.vercel.app";
-    const linksPath = process.env.BACKEND_CDN_PATH || "/api/cdn-links";
+    const s3ListPath = process.env.BACKEND_S3_LIST_PATH || "/api/s3/list";
+    const tracksPrefix = sanitizePrefixPart(process.env.BACKEND_S3_TRACKS_PREFIX || "tracks");
+    const cdnBase = (
+      process.env.CDN_BASE_URL
+      || process.env.BACKEND_CDN_PATH
+      || "https://d23du7ibe4a1ni.cloudfront.net"
+    ).replace(/\/+$/g, "");
     const bearer = process.env.API_BEARER || "";
+    const prefix = `${tracksPrefix}/${videoId}/`;
 
     const headers = {};
     if (bearer) {
@@ -47,7 +30,7 @@ export async function GET(request) {
     }
 
     const response = await fetch(
-      `${apiBase}${linksPath}?videoId=${encodeURIComponent(videoId)}`,
+      `${apiBase}${s3ListPath}?prefix=${encodeURIComponent(prefix)}`,
       {
         method: "GET",
         headers,
@@ -60,6 +43,8 @@ export async function GET(request) {
       return NextResponse.json(
         {
           error: `Backend API failed: ${response.status} ${response.statusText}`,
+          endpoint: `${apiBase}${s3ListPath}`,
+          prefix,
           details: errorText,
         },
         { status: 502 }
@@ -67,11 +52,36 @@ export async function GET(request) {
     }
 
     const result = await response.json();
-    const links = normalizeLinks(result);
+    const contents = Array.isArray(result?.contents) ? result.contents : [];
+
+    const karaokeKey = `${prefix}karaoke.mp3`;
+    const vocalsKey = `${prefix}vocals.mp3`;
+
+    const hasKaraoke = contents.some((item) => String(item?.Key || "") === karaokeKey);
+    const hasVocals = contents.some((item) => String(item?.Key || "") === vocalsKey);
+
+    const links = [];
+    if (hasKaraoke) {
+      links.push({
+        label: "Karaoke",
+        url: `${cdnBase}/${encodeURIComponent(videoId)}/karaoke.mp3`,
+      });
+    }
+    if (hasVocals) {
+      links.push({
+        label: "Vocals",
+        url: `${cdnBase}/${encodeURIComponent(videoId)}/vocals.mp3`,
+      });
+    }
 
     return NextResponse.json({
       ok: true,
       videoId,
+      prefix,
+      files: {
+        karaoke: hasKaraoke,
+        vocals: hasVocals,
+      },
       links,
       raw: result,
     });
