@@ -866,10 +866,14 @@ export default function HomePage() {
     setStatus({ type: "idle", message: "" });
 
     try {
-      const response = await fetch("/api/create-karaoke", {
+      const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeUrl }),
+        body: JSON.stringify({
+          videoId,
+          title: inputSongTitle || `YouTube ${videoId}`,
+          duration: activeExample?.duration || "N/A",
+        }),
       });
 
       const data = await response.json();
@@ -877,8 +881,8 @@ export default function HomePage() {
         throw new Error(data.error || "Failed to create karaoke request");
       }
 
-      setQueuedVideoId(data.queuedVideoId || videoId);
-      setSongTitle(data.title || "YouTube song");
+      setQueuedVideoId(data.videoId || videoId);
+      setSongTitle(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`);
 
       setStatus({
         type: "success",

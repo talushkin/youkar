@@ -80,15 +80,33 @@ export async function POST(request) {
       },
     };
 
-    const response = await fetch(`${apiBase()}/api/pending`, {
+    const backendUrl = `${apiBase()}/api/pending`;
+    const backendHeaders = getBackendHeaders();
+    const backendPayload = [entry];
+
+    console.log("[api/pending][POST] Backend call", {
+      url: backendUrl,
+      bearer: backendHeaders.Authorization || "",
+      payload: backendPayload,
+    });
+
+    const response = await fetch(backendUrl, {
       method: "POST",
-      headers: getBackendHeaders(),
-      body: JSON.stringify([entry]),
+      headers: backendHeaders,
+      body: JSON.stringify(backendPayload),
       cache: "no-store",
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error("[api/pending][POST] Backend error", {
+        url: backendUrl,
+        status: response.status,
+        statusText: response.statusText,
+        bearer: backendHeaders.Authorization || "",
+        payload: backendPayload,
+        responseBody: errorText,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -100,6 +118,12 @@ export async function POST(request) {
     }
 
     const result = await response.json();
+
+    console.log("[api/pending][POST] Backend success", {
+      url: backendUrl,
+      status: response.status,
+      result,
+    });
 
     return NextResponse.json({
       ok: true,
