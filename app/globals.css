@@ -693,6 +693,14 @@ button:disabled {
   font-weight: 600;
 }
 
+.after-payment-card.lang-he {
+  text-align: right;
+}
+
+.after-payment-card.lang-he .download-actions {
+  justify-content: flex-start;
+}
+
 .spinner {
   width: 18px;
   height: 18px;
