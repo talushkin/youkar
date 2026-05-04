@@ -903,6 +903,60 @@ export default function HomePage() {
     ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}`
     : returnUrlBase;
 
+  const paymentPanel = queuedVideoId ? (
+    <div className="payment-panel">
+      <h2>Complete Payment</h2>
+      <p className="hint">You are paying for: {songTitle}</p>
+      {!paymentEnabled && (
+        <p className="field-hint pending">⏳ Verifying files and processing...</p>
+      )}
+      <a
+        href={`https://paypage.takbull.co.il/3qBo9?phone=${encodeURIComponent(phoneNumber)}&product_name1=${encodeURIComponent(`${songTitle} KARAOKE + VOCALS files`)}&product_price1=5&product_quantity1=1`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="takbull-payment-btn"
+        style={{ pointerEvents: paymentEnabled ? "auto" : "none", opacity: paymentEnabled ? 1 : 0.5 }}
+      >
+        Pay with Takbull
+      </a>
+      <form
+        name="upayform"
+        action={upayAction}
+        method="post"
+        className="upay-form"
+      >
+        <input type="hidden" value="ipadtal@gmail.com" name="email" />
+        <input type="hidden" value="5" name="amount" />
+        <input type="hidden" value={returnUrl} name="returnurl" />
+        <input type="hidden" value="" name="ipnurl" />
+        <input
+          type="hidden"
+          value={`קובץ סאונד ${queuedVideoId}`}
+          name="paymentdetails"
+        />
+        <input type="hidden" value="1" name="maxpayments" />
+        <input type="hidden" value="1" name="livesystem" />
+        <input type="hidden" value="" name="commissionreduction" />
+        <input type="hidden" value="1" name="createinvoiceandreceipt" />
+        <input type="hidden" value="0" name="createinvoice" />
+        <input type="hidden" value="0" name="createreceipt" />
+        <input type="hidden" value="UPAY" name="refername" />
+        <input type="hidden" value="EN" name="lang" />
+        <input type="hidden" value="NIS" name="currency" />
+
+        <input
+          type="image"
+          src="https://app.upay.co.il/BANKRESOURCES/UPAY/images/buttons/payment-button1EN.png"
+          name="submit"
+          alt="Make payments with upay"
+          disabled={!paymentEnabled}
+          className={paymentEnabled && videoId ? "payment-image-btn is-highlight" : "payment-image-btn"}
+          style={{ opacity: paymentEnabled ? 1 : 0.5, cursor: paymentEnabled ? "pointer" : "not-allowed" }}
+        />
+      </form>
+    </div>
+  ) : null;
+
   return (
     <main className="page-bg">
       <section className={`card ${lang === "he" ? "lang-he" : "lang-en"}`}>
@@ -1084,6 +1138,8 @@ export default function HomePage() {
               </button>
             )}
           </div>
+
+          {paymentPanel}
 
           {currentPreviewVideoId ? (
             <div className="preview-wrap">
@@ -1286,60 +1342,6 @@ export default function HomePage() {
 
         {status.type !== "idle" ? (
           <p className={`result ${status.type}`}>{status.message}</p>
-        ) : null}
-
-        {queuedVideoId ? (
-          <div className="payment-panel">
-            <h2>Complete Payment</h2>
-            <p className="hint">You are paying for: {songTitle}</p>
-            {!paymentEnabled && (
-              <p className="field-hint pending">⏳ Verifying files and processing...</p>
-            )}
-            <a
-              href={`https://paypage.takbull.co.il/3qBo9?phone=${encodeURIComponent(phoneNumber)}&product_name1=${encodeURIComponent(`${songTitle} KARAOKE + VOCALS files`)}&product_price1=5&product_quantity1=1`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="takbull-payment-btn"
-              style={{ pointerEvents: paymentEnabled ? "auto" : "none", opacity: paymentEnabled ? 1 : 0.5 }}
-            >
-              Pay with Takbull
-            </a>
-            <form
-              name="upayform"
-              action={upayAction}
-              method="post"
-              className="upay-form"
-            >
-              <input type="hidden" value="ipadtal@gmail.com" name="email" />
-              <input type="hidden" value="5" name="amount" />
-              <input type="hidden" value={returnUrl} name="returnurl" />
-              <input type="hidden" value="" name="ipnurl" />
-              <input
-                type="hidden"
-                value={`קובץ סאונד ${queuedVideoId}`}
-                name="paymentdetails"
-              />
-              <input type="hidden" value="1" name="maxpayments" />
-              <input type="hidden" value="1" name="livesystem" />
-              <input type="hidden" value="" name="commissionreduction" />
-              <input type="hidden" value="1" name="createinvoiceandreceipt" />
-              <input type="hidden" value="0" name="createinvoice" />
-              <input type="hidden" value="0" name="createreceipt" />
-              <input type="hidden" value="UPAY" name="refername" />
-              <input type="hidden" value="EN" name="lang" />
-              <input type="hidden" value="NIS" name="currency" />
-
-              <input
-                type="image"
-                src="https://app.upay.co.il/BANKRESOURCES/UPAY/images/buttons/payment-button1EN.png"
-                name="submit"
-                alt="Make payments with upay"
-                disabled={!paymentEnabled}
-                className={paymentEnabled && videoId ? "payment-image-btn is-highlight" : "payment-image-btn"}
-                style={{ opacity: paymentEnabled ? 1 : 0.5, cursor: paymentEnabled ? "pointer" : "not-allowed" }}
-              />
-            </form>
-          </div>
         ) : null}
       </section>
     </main>

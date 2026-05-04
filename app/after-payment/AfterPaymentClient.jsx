@@ -32,7 +32,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
       return;
     }
 
-    // Optimistically set the known CDN pattern right away
+    // Optimistically keep the known CDN pattern as fallback values.
     const kar = `${CDN_BASE}/${videoId}/karaoke.mp3`;
     const voc = `${CDN_BASE}/${videoId}/vocals.mp3`;
     setKaraokeUrl(kar);
@@ -62,26 +62,37 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
             return u.includes("vocals") || u.includes("voc");
           })?.url || voc;
 
-          setKaraokeUrl(karLink);
-          setVocalsUrl(vocLink);
-          setStatus({ type: "success", message: "Your files are ready! 🎤" });
+          const hasKaraoke = receivedLinks.some((l) => {
+            const u = String(l?.url || "").toLowerCase();
+            return u.includes("karaoke") || u.includes("kar");
+          });
+          const hasVocals = receivedLinks.some((l) => {
+            const u = String(l?.url || "").toLowerCase();
+            return u.includes("vocals") || u.includes("voc");
+          });
 
-          // Send WA notification once (only if phone available)
-          if (phone && !waSentRef.current) {
-            waSentRef.current = true;
-            const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-            const waText =
-              `🎤 Your Karaoke & Vocals files are ready!\n\n` +
-              `🎵 Karaoke (no vocals):\n${karLink}\n\n` +
-              `🎙️ Vocals only:\n${vocLink}\n\n` +
-              `▶️ Original song:\n${ytUrl}`;
-            fetch("/api/wa", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ to: phone, text: waText, title: "Your Karaoke Files" }),
-            }).catch(() => {});
+          if (hasKaraoke && hasVocals) {
+            setKaraokeUrl(karLink);
+            setVocalsUrl(vocLink);
+            setStatus({ type: "success", message: "Your files are ready! 🎤" });
+
+            // Send WA notification once (only if phone available)
+            if (phone && !waSentRef.current) {
+              waSentRef.current = true;
+              const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+              const waText =
+                `🎤 Your Karaoke & Vocals files are ready!\n\n` +
+                `🎵 Karaoke (no vocals):\n${karLink}\n\n` +
+                `🎙️ Vocals only:\n${vocLink}\n\n` +
+                `▶️ Original song:\n${ytUrl}`;
+              fetch("/api/wa", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to: phone, text: waText, title: "Your Karaoke Files" }),
+              }).catch(() => {});
+            }
+            return;
           }
-          return;
         }
 
         if (!stopped) {
@@ -89,7 +100,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
             type: "pending",
             message: "Still processing… we'll update this page automatically.",
           });
-          timer = window.setTimeout(check, 7000);
+          timer = window.setTimeout(check, 5000);
         }
       } catch (err) {
         if (!stopped) {
@@ -112,6 +123,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
   const ytEmbedUrl = videoId
     ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`
     : "";
+  const isPending = status.type === "pending";
 
   if (isPaymentError) {
     return (
@@ -149,59 +161,68 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
           {status.message}
         </p>
 
-        <div className="download-links">
-          <h2>Your Files</h2>
+        {isPending && (
+          <div className="processing-indicator" role="status" aria-live="polite">
+            <span className="spinner" aria-hidden="true" />
+            <span>Preparing your CDN files… checking every 5 seconds.</span>
+          </div>
+        )}
 
-          <div className="download-row">
-            <span className="download-label">🎵 Karaoke (no vocals)</span>
-            <div className="download-actions">
-              {karaokeUrl && (
-                <>
-                  <audio
-                    controls
-                    src={karaokeUrl}
-                    className="inline-audio"
-                    preload="none"
-                  />
-                  <a
-                    href={karaokeUrl}
-                    download
-                    className="download-btn"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Download
-                  </a>
-                </>
-              )}
+        {!isPending && (
+          <div className="download-links">
+            <h2>Your Files</h2>
+
+            <div className="download-row">
+              <span className="download-label">🎵 Karaoke (no vocals)</span>
+              <div className="download-actions">
+                {karaokeUrl && (
+                  <>
+                    <audio
+                      controls
+                      src={karaokeUrl}
+                      className="inline-audio"
+                      preload="none"
+                    />
+                    <a
+                      href={karaokeUrl}
+                      download
+                      className="download-btn"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="download-row">
+              <span className="download-label">🎤 Vocals only</span>
+              <div className="download-actions">
+                {vocalsUrl && (
+                  <>
+                    <audio
+                      controls
+                      src={vocalsUrl}
+                      className="inline-audio"
+                      preload="none"
+                    />
+                    <a
+                      href={vocalsUrl}
+                      download
+                      className="download-btn"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-
-          <div className="download-row">
-            <span className="download-label">🎤 Vocals only</span>
-            <div className="download-actions">
-              {vocalsUrl && (
-                <>
-                  <audio
-                    controls
-                    src={vocalsUrl}
-                    className="inline-audio"
-                    preload="none"
-                  />
-                  <a
-                    href={vocalsUrl}
-                    download
-                    className="download-btn"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Download
-                  </a>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
 
         <a href="/" className="back-home-btn">← Create another karaoke</a>
       </section>
