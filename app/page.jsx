@@ -84,6 +84,8 @@ export default function HomePage() {
   const [inputKarUrl, setInputKarUrl] = useState("");
   const [inputVocUrl, setInputVocUrl] = useState("");
   const [loadingInputLinks, setLoadingInputLinks] = useState(false);
+  const [cdnFilesReady, setCdnFilesReady] = useState(false);
+  const [isInPendingQueue, setIsInPendingQueue] = useState(false);
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
   const [activeSource, setActiveSource] = useState("mix");
   const [ytApiLoaded, setYtApiLoaded] = useState(false);
@@ -159,6 +161,7 @@ export default function HomePage() {
   );
   const hasValidPhone = useMemo(() => /^\+?\d{8,15}$/.test(normalizedPhone), [normalizedPhone]);
   const canCreate = Boolean(videoId && !queuedVideoId && waVerified);
+  const paymentEnabled = cdnFilesReady || isInPendingQueue;
   const currentPreviewVideoId = previewVideoId || videoId;
 
   const activeExample = activeExampleIndex === INPUT_ROW_INDEX
@@ -590,6 +593,7 @@ export default function HomePage() {
       setInputKarUrl("");
       setInputVocUrl("");
       setLoadingInputLinks(false);
+      setCdnFilesReady(false);
       return;
     }
 
@@ -624,11 +628,13 @@ export default function HomePage() {
         if (!cancelled) {
           setInputKarUrl(String(kar || ""));
           setInputVocUrl(String(voc || ""));
+          setCdnFilesReady(Boolean(kar && voc));
         }
       } catch (error) {
         if (!cancelled && error?.name !== "AbortError") {
           setInputKarUrl("");
           setInputVocUrl("");
+          setCdnFilesReady(false);
         }
       } finally {
         if (!cancelled) {
@@ -644,6 +650,51 @@ export default function HomePage() {
       controller.abort();
     };
   }, [videoId]);
+
+  useEffect(() => {
+    if (!queuedVideoId) {
+      setIsInPendingQueue(false);
+      return;
+    }
+
+    const checkPendingQueue = async () => {
+      try {
+        const response = await fetch("/api/pending");
+        const data = await response.json();
+        const pending = Array.isArray(data?.pending) ? data.pending : [];
+        const found = pending.some((item) => item.videoId === queuedVideoId);
+        setIsInPendingQueue(found);
+      } catch {
+        setIsInPendingQueue(false);
+      }
+    };
+
+    checkPendingQueue();
+  }, [queuedVideoId]);
+
+  useEffect(() => {
+    if (!queuedVideoId || isInPendingQueue) return;
+
+    const addToPendingQueue = async () => {
+      try {
+        const res = await fetch("/api/pending", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoId: queuedVideoId,
+            title: songTitle || `YouTube ${queuedVideoId}`,
+          }),
+        });
+        if (res.ok) {
+          setIsInPendingQueue(true);
+        }
+      } catch {
+        // Silently fail if unable to add to queue
+      }
+    };
+
+    addToPendingQueue();
+  }, [queuedVideoId, isInPendingQueue]);
 
   const handleInputRowPlay = (source) => {
     if (!videoId) return;
@@ -1238,11 +1289,15 @@ export default function HomePage() {
           <div className="payment-panel">
             <h2>Complete Payment</h2>
             <p className="hint">You are paying for: {songTitle}</p>
+            {!paymentEnabled && (
+              <p className="field-hint pending">⏳ Verifying files and processing...</p>
+            )}
             <a
               href={`https://paypage.takbull.co.il/3qBo9?phone=${encodeURIComponent(phoneNumber)}&product_name1=${encodeURIComponent(`${songTitle} KARAOKE + VOCALS files`)}&product_price1=5&product_quantity1=1`}
               target="_blank"
               rel="noopener noreferrer"
               className="takbull-payment-btn"
+              style={{ pointerEvents: paymentEnabled ? "auto" : "none", opacity: paymentEnabled ? 1 : 0.5 }}
             >
               Pay with Takbull
             </a>
@@ -1276,7 +1331,9 @@ export default function HomePage() {
                 src="https://app.upay.co.il/BANKRESOURCES/UPAY/images/buttons/payment-button1EN.png"
                 name="submit"
                 alt="Make payments with upay"
-                className={videoId ? "payment-image-btn is-highlight" : "payment-image-btn"}
+                disabled={!paymentEnabled}
+                className={paymentEnabled && videoId ? "payment-image-btn is-highlight" : "payment-image-btn"}
+                style={{ opacity: paymentEnabled ? 1 : 0.5, cursor: paymentEnabled ? "pointer" : "not-allowed" }}
               />
             </form>
           </div>
