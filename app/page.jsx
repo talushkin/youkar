@@ -1138,24 +1138,24 @@ export default function HomePage() {
               </button>
             )}
           </div>
-
-          {paymentPanel}
-
-          {currentPreviewVideoId ? (
-            <div className="preview-wrap">
-              <p className="preview-label">Clip preview</p>
-              <iframe
-                ref={previewIframeRef}
-                key={`${currentPreviewVideoId}-${previewNonce}`}
-                title="YouTube preview"
-                src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&controls=0&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&start=${Math.max(0, Math.floor(previewTimeRef.current || 0))}&mute=${previewMuted ? 1 : 0}&enablejsapi=1`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
-            </div>
-          ) : null}
         </form>
+
+        {paymentPanel}
+
+        {currentPreviewVideoId ? (
+          <div className="preview-wrap">
+            <p className="preview-label">Clip preview</p>
+            <iframe
+              ref={previewIframeRef}
+              key={`${currentPreviewVideoId}-${previewNonce}`}
+              title="YouTube preview"
+              src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&controls=0&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&start=${Math.max(0, Math.floor(previewTimeRef.current || 0))}&mute=${previewMuted ? 1 : 0}&enablejsapi=1`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          </div>
+        ) : null}
 
         <div className="examples-panel">
           <h2>Example Songs</h2>
