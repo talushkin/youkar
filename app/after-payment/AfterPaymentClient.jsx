@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const CDN_BASE = "https://d23du7ibe4a1ni.cloudfront.net";
 
-export default function AfterPaymentClient({ videoId, errorDescription }) {
+export default function AfterPaymentClient({ videoId, errorDescription, phone }) {
   const [status, setStatus] = useState({
     type: "pending",
     message: "Payment confirmed! Preparing your karaoke files…",
   });
   const [karaokeUrl, setKaraokeUrl] = useState("");
   const [vocalsUrl, setVocalsUrl] = useState("");
+  const waSentRef = useRef(false);
 
   const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
 
@@ -64,6 +65,22 @@ export default function AfterPaymentClient({ videoId, errorDescription }) {
           setKaraokeUrl(karLink);
           setVocalsUrl(vocLink);
           setStatus({ type: "success", message: "Your files are ready! 🎤" });
+
+          // Send WA notification once (only if phone available)
+          if (phone && !waSentRef.current) {
+            waSentRef.current = true;
+            const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            const waText =
+              `🎤 Your Karaoke & Vocals files are ready!\n\n` +
+              `🎵 Karaoke (no vocals):\n${karLink}\n\n` +
+              `🎙️ Vocals only:\n${vocLink}\n\n` +
+              `▶️ Original song:\n${ytUrl}`;
+            fetch("/api/wa", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ to: phone, text: waText, title: "Your Karaoke Files" }),
+            }).catch(() => {});
+          }
           return;
         }
 

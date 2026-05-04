@@ -3,6 +3,9 @@ import AfterPaymentClient from "./AfterPaymentClient";
 export default function AfterPaymentPage({ searchParams }) {
   const videoId = typeof searchParams?.videoId === "string" ? searchParams.videoId : "";
   const errorDescription = typeof searchParams?.errordescription === "string" ? searchParams.errordescription : "";
+  const phone = typeof searchParams?.cellphonenotify === "string" ? searchParams.cellphonenotify
+    : typeof searchParams?.phone === "string" ? searchParams.phone
+    : "";
 
-  return <AfterPaymentClient videoId={videoId} errorDescription={errorDescription} />;
+  return <AfterPaymentClient videoId={videoId} errorDescription={errorDescription} phone={phone} />;
 }

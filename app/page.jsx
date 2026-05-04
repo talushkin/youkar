@@ -128,6 +128,8 @@ export default function HomePage() {
       creating: "3) יוצר...",
       createQuick: "צור קריוקי",
       inputSongFallback: "שיר מהקלט",
+      alreadyHasKaraoke: "לשיר הזה כבר יש גרסת קריוקי ווקאל!",
+      alreadyHasKaraokeAction: "שלם וקבל את הקבצים →",
     },
     en: {
       headline: "Any YOUTUBE link to a karaoke playback in just a few sec!",
@@ -145,6 +147,8 @@ export default function HomePage() {
       creating: "3) Creating...",
       createQuick: "Create Karaoke",
       inputSongFallback: "Input song",
+      alreadyHasKaraoke: "This track already has a karaoke & vocals version!",
+      alreadyHasKaraokeAction: "Pay & get your files →",
     },
   };
 
@@ -1072,14 +1076,31 @@ export default function HomePage() {
                 -&gt; {ui.create}
               </p>
             ) : null}
-            <button
-              ref={createButtonRef}
-              type="submit"
-              disabled={!canCreate || isCreating}
-              className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
-            >
-              {isCreating ? ui.creating : ui.create}
-            </button>
+            {cdnFilesReady && videoId && !queuedVideoId ? (
+              <div className="already-karaoke-banner">
+                <p className="already-karaoke-msg">✅ {ui.alreadyHasKaraoke}</p>
+                <button
+                  type="button"
+                  className="primary-cta is-highlight"
+                  onClick={() => {
+                    setQueuedVideoId(videoId);
+                    setSongTitle(inputSongTitle || `YouTube ${videoId}`);
+                    setStatus({ type: "success", message: ui.alreadyHasKaraokeAction });
+                  }}
+                >
+                  {ui.alreadyHasKaraokeAction}
+                </button>
+              </div>
+            ) : (
+              <button
+                ref={createButtonRef}
+                type="submit"
+                disabled={!canCreate || isCreating}
+                className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
+              >
+                {isCreating ? ui.creating : ui.create}
+              </button>
+            )}
           </div>
 
           {currentPreviewVideoId ? (
