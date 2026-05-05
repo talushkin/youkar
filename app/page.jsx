@@ -78,11 +78,8 @@ export default function HomePage() {
   const [showSongDropdown, setShowSongDropdown] = useState(false);
   const [phoneAreaCode, setPhoneAreaCode] = useState("050");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [waStatus, setWaStatus] = useState({ type: "idle", message: "" });
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isCreating, setIsCreating] = useState(false);
-  const [isSendingWa, setIsSendingWa] = useState(false);
-  const [waVerified, setWaVerified] = useState(false);
   const [queuedVideoId, setQueuedVideoId] = useState("");
   const [songTitle, setSongTitle] = useState("");
   const [inputSongTitle, setInputSongTitle] = useState("");
@@ -127,10 +124,8 @@ export default function HomePage() {
       invalidYoutube: "נא להכניס לינק YouTube תקין.",
       phonePlaceholder: "מספר טלפון ל-WhatsApp (לדוגמה 972501234567)",
       phoneInvalid: "נא להזין מספר טלפון תקין ל-WhatsApp.",
-      sendWa: "2) שלח WA",
-      sendingWa: "2) שולח...",
-      create: "3) צור קריוקי",
-      creating: "3) יוצר...",
+      create: "2) צור קריוקי",
+      creating: "2) יוצר...",
       createQuick: "צור קריוקי",
       inputSongFallback: "שיר מהקלט",
       alreadyHasKaraoke: "לשיר הזה כבר יש גרסת קריוקי ווקאל!",
@@ -146,10 +141,8 @@ export default function HomePage() {
       invalidYoutube: "Please use a valid YouTube URL.",
       phonePlaceholder: "Phone number for WhatsApp (e.g. 972501234567)",
       phoneInvalid: "Enter a valid phone number to send WhatsApp.",
-      sendWa: "2) Send WA",
-      sendingWa: "2) Sending...",
-      create: "3) Create Karaoke",
-      creating: "3) Creating...",
+      create: "2) Create Karaoke",
+      creating: "2) Creating...",
       createQuick: "Create Karaoke",
       inputSongFallback: "Input song",
       alreadyHasKaraoke: "This track already has a karaoke & vocals version!",
@@ -169,7 +162,7 @@ export default function HomePage() {
     [phoneAreaCode, phoneNumber]
   );
   const hasValidPhone = useMemo(() => phoneNumber.length === 7 && /^\d{7}$/.test(phoneNumber), [phoneNumber]);
-  const canCreate = Boolean(videoId && !queuedVideoId && waVerified);
+  const canCreate = Boolean(videoId && hasValidPhone && !queuedVideoId);
   const paymentEnabled = cdnFilesReady || isInPendingQueue;
   const currentPreviewVideoId = previewVideoId || videoId;
 
@@ -765,8 +758,6 @@ export default function HomePage() {
     }
     setShowSongDropdown(false);
     setSongSearchResults([]);
-    setWaVerified(false);
-    setWaStatus({ type: "idle", message: "" });
     setQueuedVideoId("");
     setStatus({ type: "idle", message: "" });
   };
@@ -819,14 +810,20 @@ export default function HomePage() {
     });
   };
 
-  const sendWhatsApp = async () => {
-    if (!videoId || !hasValidPhone || isSendingWa) return;
+  const createKaraoke = async () => {
+    if (!videoId || !hasValidPhone) {
+      setStatus({
+        type: "error",
+        message: "Please enter a valid phone number and YouTube link.",
+      });
+      return;
+    }
 
-    setIsSendingWa(true);
-    setWaStatus({ type: "idle", message: "" });
+    setIsCreating(true);
+    setStatus({ type: "idle", message: "" });
 
     try {
-      const response = await fetch("/api/submit-request", {
+      const waResponse = await fetch("/api/submit-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -836,41 +833,11 @@ export default function HomePage() {
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "Could not send WhatsApp request");
+      const waData = await waResponse.json();
+      if (!waResponse.ok) {
+        throw new Error(waData?.error || "Could not send WhatsApp request");
       }
 
-      setWaVerified(true);
-      setWaStatus({
-        type: "success",
-        message: "WhatsApp verification sent successfully.",
-      });
-    } catch (error) {
-      setWaVerified(false);
-      setWaStatus({
-        type: "error",
-        message: error instanceof Error ? error.message : "Could not send WhatsApp request",
-      });
-    } finally {
-      setIsSendingWa(false);
-    }
-  };
-
-  const createKaraoke = async () => {
-    if (!videoId) return;
-    if (!waVerified) {
-      setStatus({
-        type: "error",
-        message: "Please verify WhatsApp first.",
-      });
-      return;
-    }
-
-    setIsCreating(true);
-    setStatus({ type: "idle", message: "" });
-
-    try {
       const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -891,7 +858,7 @@ export default function HomePage() {
 
       setStatus({
         type: "success",
-        message: "Karaoke request created. Continue to payment.",
+        message: "Karaoke request created and WhatsApp sent. Continue to payment.",
       });
     } catch (err) {
       setStatus({
@@ -969,8 +936,6 @@ export default function HomePage() {
                 if (nextVideoId) {
                   pauseCurrent();
                 }
-                setWaVerified(false);
-                setWaStatus({ type: "idle", message: "" });
                 setQueuedVideoId("");
                 setStatus({ type: "idle", message: "" });
               }}
@@ -1029,8 +994,6 @@ export default function HomePage() {
               value={phoneAreaCode}
               onChange={(e) => {
                 setPhoneAreaCode(e.target.value);
-                setWaVerified(false);
-                setWaStatus({ type: "idle", message: "" });
                 setStatus({ type: "idle", message: "" });
               }}
               style={{
@@ -1062,8 +1025,6 @@ export default function HomePage() {
               onChange={(e) => {
                 const val = e.target.value.replace(/\D/g, "").slice(0, 7);
                 setPhoneNumber(val);
-                setWaVerified(false);
-                setWaStatus({ type: "idle", message: "" });
                 setStatus({ type: "idle", message: "" });
               }}
               style={{
@@ -1075,38 +1036,10 @@ export default function HomePage() {
                 color: "#fff",
               }}
             />
-            <button
-              type="button"
-              className="wa-send-btn"
-              onClick={sendWhatsApp}
-              disabled={!videoId || !hasValidPhone || isSendingWa}
-              title="Send WhatsApp verification"
-              aria-label="Send WhatsApp verification"
-            >
-              <svg viewBox="0 0 24 24" className="wa-icon" aria-hidden="true">
-                <path
-                  d="M20 12a8 8 0 0 1-11.7 7l-4.3 1.2 1.4-4.1A8 8 0 1 1 20 12Z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M9.4 8.9c.2-.5.5-.5.7-.5h.6c.2 0 .4.1.5.3l1 2c.1.2.1.4 0 .6l-.5.8c-.1.2-.1.4 0 .6.3.6.9 1.3 1.6 1.8.2.2.4.2.6.1l.8-.5c.2-.1.4-.1.6 0l2 1c.2.1.3.3.3.5v.6c0 .2 0 .5-.5.7-.5.2-1.8.6-3.8-.2-1.1-.4-2.3-1.3-3.3-2.3-1-1-1.9-2.2-2.3-3.3-.8-2-.4-3.3-.2-3.8Z"
-                  fill="currentColor"
-                />
-              </svg>
-              {isSendingWa ? ui.sendingWa : ui.sendWa}
-            </button>
           </div>
 
           {phoneNumber && !hasValidPhone ? (
             <p className="field-hint error">{ui.phoneInvalid}</p>
-          ) : null}
-
-          {waStatus.type !== "idle" ? (
-            <p className={`field-hint ${waStatus.type}`}>{waStatus.message}</p>
           ) : null}
 
           <div className={`create-cta-wrap ${showCreateHint ? "is-aimed" : ""}`}>
