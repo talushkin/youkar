@@ -122,8 +122,8 @@ export default function HomePage() {
       searchLoading: "מחפש שירים...",
       noResults: "לא נמצאו תוצאות",
       invalidYoutube: "נא להכניס לינק YouTube תקין.",
-      phonePlaceholder: "מספר טלפון ל-WhatsApp (לדוגמה 972501234567)",
-      phoneInvalid: "נא להזין מספר טלפון תקין ל-WhatsApp.",
+      phonePlaceholder: "מספר טלפון ל-WhatsApp",
+      phoneInvalid: "נא לבחור קידומת 050-058 ולהזין 7 ספרות.",
       create: "2) צור קריוקי",
       creating: "2) יוצר...",
       createQuick: "צור קריוקי",
@@ -139,8 +139,8 @@ export default function HomePage() {
       searchLoading: "Searching songs...",
       noResults: "No results found",
       invalidYoutube: "Please use a valid YouTube URL.",
-      phonePlaceholder: "Phone number for WhatsApp (e.g. 972501234567)",
-      phoneInvalid: "Enter a valid phone number to send WhatsApp.",
+      phonePlaceholder: "Phone number for WhatsApp",
+      phoneInvalid: "Choose area code 050-058 and enter 7 digits.",
       create: "2) Create Karaoke",
       creating: "2) Creating...",
       createQuick: "Create Karaoke",
@@ -158,7 +158,7 @@ export default function HomePage() {
     return value.startsWith("http") || value.includes("youtube.com") || value.includes("youtu.be");
   }, [youtubeUrl]);
   const normalizedPhone = useMemo(
-    () => `972${phoneAreaCode.slice(1)}${phoneNumber}`.replace(/[^\d]/g, ""),
+    () => `${phoneAreaCode}${phoneNumber}`.replace(/[^\d]/g, ""),
     [phoneAreaCode, phoneNumber]
   );
   const hasValidPhone = useMemo(() => phoneNumber.length === 7 && /^\d{7}$/.test(phoneNumber), [phoneNumber]);
@@ -674,30 +674,6 @@ export default function HomePage() {
     checkPendingQueue();
   }, [queuedVideoId]);
 
-  useEffect(() => {
-    if (!queuedVideoId || isInPendingQueue) return;
-
-    const addToPendingQueue = async () => {
-      try {
-        const res = await fetch("/api/pending", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            videoId: queuedVideoId,
-            title: songTitle || `YouTube ${queuedVideoId}`,
-          }),
-        });
-        if (res.ok) {
-          setIsInPendingQueue(true);
-        }
-      } catch {
-        // Silently fail if unable to add to queue
-      }
-    };
-
-    addToPendingQueue();
-  }, [queuedVideoId, isInPendingQueue]);
-
   const handleInputRowPlay = (source) => {
     if (!videoId) return;
 
@@ -827,6 +803,8 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          phoneAreaCode,
+          localNumber: phoneNumber,
           phoneNumber: normalizedPhone,
           youtubeUrl,
           videoId,
@@ -853,6 +831,7 @@ export default function HomePage() {
         throw new Error(data.error || "Failed to create karaoke request");
       }
 
+      setIsInPendingQueue(true);
       setQueuedVideoId(data.videoId || videoId);
       setSongTitle(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`);
 
@@ -989,22 +968,15 @@ export default function HomePage() {
             <p className="field-hint error">{ui.invalidYoutube}</p>
           ) : null}
 
-          <div className="wa-row" dir="ltr" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="wa-row" dir="ltr">
             <select
+              className="wa-area-code"
               value={phoneAreaCode}
               onChange={(e) => {
                 setPhoneAreaCode(e.target.value);
                 setStatus({ type: "idle", message: "" });
               }}
-              style={{
-                width: "70px",
-                padding: "10px",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                background: "rgba(5, 20, 43, 0.9)",
-                color: "#fff",
-                fontSize: "0.9rem",
-              }}
+              aria-label="Area code"
             >
               <option value="050">050</option>
               <option value="051">051</option>
@@ -1017,6 +989,7 @@ export default function HomePage() {
               <option value="058">058</option>
             </select>
             <input
+              className="wa-local-number"
               type="tel"
               inputMode="numeric"
               placeholder="7 digits"
@@ -1027,14 +1000,7 @@ export default function HomePage() {
                 setPhoneNumber(val);
                 setStatus({ type: "idle", message: "" });
               }}
-              style={{
-                flex: 1,
-                padding: "10px",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                background: "rgba(5, 20, 43, 0.7)",
-                color: "#fff",
-              }}
+              aria-label={ui.phonePlaceholder}
             />
           </div>
 
@@ -1068,7 +1034,7 @@ export default function HomePage() {
                 ref={createButtonRef}
                 type="submit"
                 disabled={!canCreate || isCreating}
-                className={canCreate ? "primary-cta is-highlight" : "primary-cta"}
+                className={canCreate ? "primary-cta create-cta-button is-highlight" : "primary-cta create-cta-button"}
               >
                 {isCreating ? ui.creating : ui.create}
               </button>

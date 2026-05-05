@@ -420,6 +420,20 @@ input[type="tel"] {
   align-items: center;
 }
 
+.wa-area-code {
+  width: 80px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(5, 20, 43, 0.9);
+  color: var(--text);
+  padding: 12px 10px;
+  font-size: 0.9rem;
+}
+
+.wa-local-number {
+  flex: 1;
+}
+
 .wa-row input[type="tel"] {
   flex: 1;
   width: auto;
@@ -468,6 +482,17 @@ button:disabled {
 .primary-cta.is-highlight {
   box-shadow: 0 0 0 2px rgba(255, 190, 80, 0.7), 0 0 18px rgba(255, 176, 56, 0.5);
   animation: cta-pulse 1.2s ease-in-out infinite;
+}
+
+.create-cta-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.create-cta-button {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .payment-image-btn {
@@ -783,5 +808,9 @@ button:disabled {
   .lead {
     font-size: 0.9rem;
     margin: 8px auto 16px;
+  }
+
+  .wa-area-code {
+    width: 78px;
   }
 }

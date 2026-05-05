@@ -96,12 +96,27 @@ export async function POST(request) {
     const body = await request.json();
     const youtubeUrl = String(body?.youtubeUrl || "").trim();
     const providedVideoId = String(body?.videoId || "").trim();
+    const phoneAreaCode = String(body?.phoneAreaCode || "").trim();
+    const localNumber = String(body?.localNumber || "").trim();
     const phoneNumber = String(body?.phoneNumber || "").trim();
 
-    const normalizedPhone = phoneNumber.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
-    if (!/^\+?\d{8,15}$/.test(normalizedPhone)) {
+    let localPhone = "";
+    if (/^05[0-8]$/.test(phoneAreaCode) && /^\d{7}$/.test(localNumber)) {
+      localPhone = `${phoneAreaCode}${localNumber}`;
+    } else {
+      const rawDigits = phoneNumber.replace(/\D/g, "");
+      if (/^05[0-8]\d{7}$/.test(rawDigits)) {
+        localPhone = rawDigits;
+      } else if (/^9725[0-8]\d{7}$/.test(rawDigits)) {
+        localPhone = `0${rawDigits.slice(3)}`;
+      }
+    }
+
+    if (!/^05[0-8]\d{7}$/.test(localPhone)) {
       return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
     }
+
+    const whatsappPhone = `972${localPhone.slice(1)}`;
 
     const derivedVideoId = extractVideoId(youtubeUrl);
     const videoId = providedVideoId || derivedVideoId;
@@ -114,8 +129,8 @@ export async function POST(request) {
 
     const submitUrlTemplate = buildSubmitUrl();
     const submitUrl = submitUrlTemplate.includes("{phone}")
-      ? submitUrlTemplate.replace("{phone}", encodeURIComponent(normalizedPhone))
-      : `${submitUrlTemplate.replace(/\/$/, "")}/${encodeURIComponent(normalizedPhone)}`;
+      ? submitUrlTemplate.replace("{phone}", encodeURIComponent(whatsappPhone))
+      : `${submitUrlTemplate.replace(/\/$/, "")}/${encodeURIComponent(whatsappPhone)}`;
     const bearer = process.env.API_BEARER || "";
 
     const headers = { "Content-Type": "application/json" };
@@ -125,8 +140,11 @@ export async function POST(request) {
 
     const payload = {
       title: "YouKar Verification",
-      text: `✅ Your request was received.\n📞 Phone: ${normalizedPhone}\n🎵 Title: ${videoMeta.title}\n⏱️ Duration: ${videoMeta.duration}\n🔗 YouTube: ${normalizedYoutubeUrl}\n🎤 We will update you here once karaoke is ready.`,
-      phoneNumber: normalizedPhone,
+      text: `✅ Your request was received.\n📞 Phone: ${whatsappPhone}\n🎵 Title: ${videoMeta.title}\n⏱️ Duration: ${videoMeta.duration}\n🔗 YouTube: ${normalizedYoutubeUrl}\n🎤 We will update you here once karaoke is ready.`,
+      phoneNumber: whatsappPhone,
+      countryCode: "972",
+      areaCode: localPhone.slice(0, 3),
+      localNumber: localPhone.slice(3),
       youtubeUrl: normalizedYoutubeUrl,
       videoId,
       source: "youkar-web",
