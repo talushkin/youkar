@@ -890,8 +890,11 @@ export default function HomePage() {
     ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}`
     : null;
 
+  const paymentNavigatedRef = useRef(false);
   useEffect(() => {
     if (!paymentIframeUrl) return;
+    if (paymentNavigatedRef.current) return;
+    paymentNavigatedRef.current = true;
     window.location.assign(paymentIframeUrl);
   }, [paymentIframeUrl]);
 
