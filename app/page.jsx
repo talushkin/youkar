@@ -882,7 +882,7 @@ export default function HomePage() {
   };
 
   const returnUrl = queuedVideoId
-    ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}`
+    ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(songTitle)}`
     : returnUrlBase;
 
   const paymentIframeUrl = queuedVideoId

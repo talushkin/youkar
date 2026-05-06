@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react";
 
 const CDN_BASE = "https://d23du7ibe4a1ni.cloudfront.net";
 
-export default function AfterPaymentClient({ videoId, errorDescription, phone }) {
+export default function AfterPaymentClient({ videoId, errorDescription, phone, title }) {
   const [status, setStatus] = useState({
     type: "pending",
     message: "Payment confirmed! Preparing your karaoke files…",
   });
   const [karaokeUrl, setKaraokeUrl] = useState("");
   const [vocalsUrl, setVocalsUrl] = useState("");
-  const waSentRef = useRef(false);
+  const waStartSentRef = useRef(false);
+  const waReadySentRef = useRef(false);
   const karaokeAudioRef = useRef(null);
   const vocalsAudioRef = useRef(null);
   const isSyncingRef = useRef(false);
@@ -103,6 +104,55 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
     setKaraokeUrl(kar);
     setVocalsUrl(voc);
 
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    const sendProcessingStartedWa = async () => {
+      if (!phone || waStartSentRef.current) return;
+
+      let ytTitle = title || `YouTube ${videoId}`;
+      let ytLink = youtubeUrl;
+
+      try {
+        const pendingResponse = await fetch(`/api/pending?videoId=${encodeURIComponent(videoId)}`);
+        const pendingData = await pendingResponse.json();
+        if (pendingResponse.ok) {
+          const pendingItem = Array.isArray(pendingData?.pending) ? pendingData.pending[0] : null;
+          if (pendingItem?.title) {
+            ytTitle = String(pendingItem.title);
+          }
+          if (pendingItem?.link) {
+            ytLink = String(pendingItem.link);
+          }
+        }
+      } catch {
+        // Keep fallback title/link if pending lookup fails.
+      }
+
+      const waText =
+        `✅ Payment successful!\n\n` +
+        `🎛️ Playback creation has started.\n` +
+        `⏳ Your files will soon be ready.\n` +
+        `💬 We will send another WhatsApp message when they are ready with the MP3 playback links.\n\n` +
+        `🎵 Title: ${ytTitle}\n` +
+        `🔗 YouTube: ${ytLink}`;
+
+      try {
+        const waResponse = await fetch("/api/wa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: phone, text: waText, title: "Payment Confirmed" }),
+        });
+
+        if (waResponse.ok) {
+          waStartSentRef.current = true;
+        }
+      } catch {
+        // Ignore WA errors to avoid blocking page progress.
+      }
+    };
+
+    sendProcessingStartedWa();
+
     let stopped = false;
     let timer = null;
 
@@ -142,14 +192,16 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
             setStatus({ type: "success", message: "Your files are ready! 🎤" });
 
             // Send WA notification once (only if phone available)
-            if (phone && !waSentRef.current) {
-              waSentRef.current = true;
+            if (phone && !waReadySentRef.current) {
+              waReadySentRef.current = true;
               const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+              const titleFromLinks = receivedLinks.find((l) => String(l?.title || "").trim())?.title;
               const waText =
                 `🎤 Your Karaoke & Vocals files are ready!\n\n` +
+                `🎵 Title: ${titleFromLinks || title || `YouTube ${videoId}`}\n` +
+                `▶️ Original song:\n${ytUrl}\n\n` +
                 `🎵 Karaoke (no vocals):\n${karLink}\n\n` +
-                `🎙️ Vocals only:\n${vocLink}\n\n` +
-                `▶️ Original song:\n${ytUrl}`;
+                `🎙️ Vocals only:\n${vocLink}`;
               fetch("/api/wa", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -183,7 +235,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
       stopped = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [videoId, isPaymentError]);
+  }, [videoId, isPaymentError, phone, title]);
 
   const ytEmbedUrl = videoId
     ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`
