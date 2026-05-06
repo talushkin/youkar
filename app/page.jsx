@@ -889,6 +889,11 @@ export default function HomePage() {
     ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}`
     : null;
 
+  useEffect(() => {
+    if (!paymentIframeUrl) return;
+    window.location.assign(paymentIframeUrl);
+  }, [paymentIframeUrl]);
+
   return (
     <main className="page-bg">
       <section className={`card ${lang === "he" ? "lang-he" : "lang-en"}`}>
@@ -1071,16 +1076,7 @@ export default function HomePage() {
         </form>
 
         {paymentIframeUrl ? (
-          <iframe
-            src={paymentIframeUrl}
-            className="payment-panel"
-            style={{
-              border: "none",
-              width: "100%",
-            }}
-            title="Payment Form"
-            sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
-          />
+          <p className="field-hint">{lang === "he" ? "מעביר לעמוד תשלום..." : "Redirecting to payment page..."}</p>
         ) : null}
 
         {currentPreviewVideoId ? (
