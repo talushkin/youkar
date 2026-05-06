@@ -31,8 +31,10 @@ export async function GET(request) {
 
     const data = await response.json();
 
-    // Normalize: backend may return array or object with pending[]
-    const pending = Array.isArray(data) ? data : (Array.isArray(data?.pending) ? data.pending : []);
+    // Normalize: backend may return raw array, { pending: [] }, or { array: [] }.
+    const pending = Array.isArray(data)
+      ? data
+      : (Array.isArray(data?.pending) ? data.pending : (Array.isArray(data?.array) ? data.array : []));
 
     return NextResponse.json({
       ok: true,
@@ -53,36 +55,49 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
+    // Accept either backend-style array payload or a single object payload.
+    const incomingItems = Array.isArray(body) ? body : [body];
 
-    // Accept either a full entry object or just { videoId, title, duration }
-    const videoId = body?.videoId;
-    if (!videoId) {
-      return NextResponse.json({ error: "videoId is required" }, { status: 400 });
+    const normalizedEntries = incomingItems
+      .filter((item) => item && typeof item === "object")
+      .map((incoming) => {
+        const videoId = incoming?.videoId;
+        if (!videoId) return null;
+
+        const incomingMeta = incoming?.meta || {};
+
+        return {
+          videoId,
+          link: incoming?.link || `https://www.youtube.com/watch?v=${videoId}`,
+          title: incoming?.title || `YouTube ${videoId}`,
+          percent: incoming?.percent ?? "",
+          created: incoming?.created || nowAsCreatedString(),
+          completed: incoming?.completed ?? null,
+          startedStems: incoming?.startedStems ?? null,
+          finishStems: incoming?.finishStems ?? null,
+          duration: incoming?.duration || "N/A",
+          voc: incoming?.voc ?? null,
+          kar: incoming?.kar ?? null,
+          meta: {
+            playlistId: incomingMeta.playlistId ?? null,
+            playlistName: incomingMeta.playlistName ?? null,
+            source: incomingMeta.source || "spotit-FE",
+            kind: incomingMeta.kind || "karaoke-missing",
+          },
+        };
+      })
+      .filter(Boolean);
+
+    if (normalizedEntries.length === 0) {
+      return NextResponse.json(
+        { error: "videoId is required in at least one item" },
+        { status: 400 }
+      );
     }
-
-    const entry = {
-      videoId,
-      link: `https://www.youtube.com/watch?v=${videoId}`,
-      title: body?.title || `YouTube ${videoId}`,
-      percent: "",
-      created: nowAsCreatedString(),
-      completed: null,
-      startedStems: null,
-      finishStems: null,
-      duration: body?.duration || "N/A",
-      voc: null,
-      kar: null,
-      meta: {
-        playlistId: null,
-        playlistName: null,
-        source: "spotit-FE",
-        kind: "karaoke-missing",
-      },
-    };
 
     const backendUrl = `${apiBase()}/api/pending`;
     const backendHeaders = getBackendHeaders();
-    const backendPayload = [entry];
+    const backendPayload = normalizedEntries;
 
     console.log("[api/pending][POST] Backend call", {
       url: backendUrl,
@@ -125,12 +140,8 @@ export async function POST(request) {
       result,
     });
 
-    return NextResponse.json({
-      ok: true,
-      videoId,
-      entry,
-      backend: result,
-    });
+    // Mirror backend response shape so FE/internal tooling gets identical format.
+    return NextResponse.json(result, { status: response.status });
   } catch (error) {
     return NextResponse.json(
       {

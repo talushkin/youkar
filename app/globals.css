@@ -274,8 +274,12 @@ h1 {
 
 .payment-panel {
   margin-top: 20px;
+  display: block;
+  width: 100%;
   border-top: 1px solid var(--line);
   padding-top: 16px;
+  height: clamp(620px, calc(100vh - 110px), 920px);
+  overflow: hidden;
 }
 
 h2 {
@@ -408,6 +412,10 @@ input[type="tel"] {
   text-align: right;
 }
 
+.card.lang-he .request-form .youtube-step-label {
+  text-align: center;
+}
+
 .card.lang-he #youtube,
 .card.lang-he input[type="tel"] {
   direction: ltr;
@@ -415,28 +423,53 @@ input[type="tel"] {
 }
 
 .wa-row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
   align-items: center;
+  width: 90%;
+  margin: 0 auto;
+}
+
+.wa-row-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: linear-gradient(135deg, #24cc63, #1ea952);
+  border: 1px solid rgba(146, 255, 186, 0.72);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+}
+
+.wa-area-code,
+.wa-local-number {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  padding: 12px 14px;
+  height: 42px;
 }
 
 .wa-area-code {
-  width: 80px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(5, 20, 43, 0.9);
+  width: 92px;
+  min-width: 92px;
+  text-align: left;
+}
+
+.wa-area-code option {
+  background: #1a2b47;
   color: var(--text);
-  padding: 12px 10px;
-  font-size: 0.9rem;
 }
 
 .wa-local-number {
-  flex: 1;
-}
-
-.wa-row input[type="tel"] {
-  flex: 1;
-  width: auto;
+  width: 100%;
 }
 
 .wa-send-btn {
@@ -446,7 +479,6 @@ input[type="tel"] {
   gap: 8px;
   padding: 11px 14px;
   background: linear-gradient(90deg, #1ea952, #24cc63);
-  flex-shrink: 0;
 }
 
 .wa-icon {
@@ -482,17 +514,6 @@ button:disabled {
 .primary-cta.is-highlight {
   box-shadow: 0 0 0 2px rgba(255, 190, 80, 0.7), 0 0 18px rgba(255, 176, 56, 0.5);
   animation: cta-pulse 1.2s ease-in-out infinite;
-}
-
-.create-cta-wrap {
-  display: flex;
-  justify-content: center;
-}
-
-.create-cta-button {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .payment-image-btn {
@@ -704,6 +725,26 @@ button:disabled {
   font-weight: 600;
   color: #6fffb0;
   margin: 0;
+  text-align: center;
+}
+
+.youtube-step-label {
+  text-align: center;
+  width: 90%;
+  margin: 0 auto;
+}
+
+.create-cta-wrap {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+}
+
+.create-cta-button {
+  width: 90%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .result.info {
@@ -721,14 +762,6 @@ button:disabled {
   margin-top: 4px;
   color: #d2f2ff;
   font-weight: 600;
-}
-
-.after-payment-card.lang-he {
-  text-align: right;
-}
-
-.after-payment-card.lang-he .download-actions {
-  justify-content: flex-start;
 }
 
 .spinner {
@@ -810,7 +843,4 @@ button:disabled {
     margin: 8px auto 16px;
   }
 
-  .wa-area-code {
-    width: 78px;
-  }
 }

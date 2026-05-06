@@ -117,36 +117,56 @@ export default function HomePage() {
     he: {
       headline: "קריוקי לכל יוטיוב תוך שניות",
       lead: "הדבקה, אימות ויצירת בקשה לקריוקי במהירות.",
-      step1: "1) לינק/חיפוש יוטיוב",
+      step1: "לינק/חיפוש יוטיוב",
       searchPlaceholder: "הדבק לינק יוטיוב או חפש שיר...",
       searchLoading: "מחפש שירים...",
       noResults: "לא נמצאו תוצאות",
       invalidYoutube: "נא להכניס לינק YouTube תקין.",
       phonePlaceholder: "מספר טלפון ל-WhatsApp",
       phoneInvalid: "נא לבחור קידומת 050-058 ולהזין 7 ספרות.",
-      create: "2) צור קריוקי",
-      creating: "2) יוצר...",
+      create: "צור קריוקי",
+      creating: "יוצר...",
       createQuick: "צור קריוקי",
       inputSongFallback: "שיר מהקלט",
       alreadyHasKaraoke: "לשיר הזה כבר יש גרסת קריוקי ווקאל!",
       alreadyHasKaraokeAction: "שלם וקבל את הקבצים →",
+      examplesTitle: "שירים לדוגמה",
+      colTitle: "כותרת",
+      colMix: "מיקס",
+      colKar: "קריוקי",
+      colVoc: "ווקאל",
+      nowPlaying: "מתנגן כעת",
+      syncTime: "זמן סנכרון",
+      play: "נגן",
+      pause: "עצור",
+      clipPreview: "תצוגת קליפ",
     },
     en: {
       headline: "Any YOUTUBE link to a karaoke playback in just a few sec!",
       lead: "Paste, verify, and create your karaoke request in seconds.",
-      step1: "1) YouTube Song Link/Search",
+      step1: "YouTube Song Link/Search",
       searchPlaceholder: "Paste YouTube URL or search song title...",
       searchLoading: "Searching songs...",
       noResults: "No results found",
       invalidYoutube: "Please use a valid YouTube URL.",
       phonePlaceholder: "Phone number for WhatsApp",
       phoneInvalid: "Choose area code 050-058 and enter 7 digits.",
-      create: "2) Create Karaoke",
-      creating: "2) Creating...",
+      create: "Create Karaoke",
+      creating: "Creating...",
       createQuick: "Create Karaoke",
       inputSongFallback: "Input song",
       alreadyHasKaraoke: "This track already has a karaoke & vocals version!",
       alreadyHasKaraokeAction: "Pay & get your files →",
+      examplesTitle: "Example Songs",
+      colTitle: "TITLE",
+      colMix: "MIX",
+      colKar: "KAR",
+      colVoc: "VOC",
+      nowPlaying: "Now Playing",
+      syncTime: "Sync time",
+      play: "Play",
+      pause: "Pause",
+      clipPreview: "Clip preview",
     },
   };
 
@@ -165,6 +185,11 @@ export default function HomePage() {
   const canCreate = Boolean(videoId && hasValidPhone && !queuedVideoId);
   const paymentEnabled = cdnFilesReady || isInPendingQueue;
   const currentPreviewVideoId = previewVideoId || videoId;
+  const sourceLabel = {
+    mix: ui.colMix,
+    kar: ui.colKar,
+    voc: ui.colVoc,
+  };
 
   const activeExample = activeExampleIndex === INPUT_ROW_INDEX
     ? {
@@ -819,11 +844,13 @@ export default function HomePage() {
       const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          videoId,
-          title: inputSongTitle || `YouTube ${videoId}`,
-          duration: activeExample?.duration || "N/A",
-        }),
+        body: JSON.stringify([
+          {
+            videoId,
+            title: inputSongTitle || `YouTube ${videoId}`,
+            duration: activeExample?.duration || "N/A",
+          },
+        ]),
       });
 
       const data = await response.json();
@@ -859,7 +886,7 @@ export default function HomePage() {
     : returnUrlBase;
 
   const paymentIframeUrl = queuedVideoId
-    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}`
+    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}`
     : null;
 
   return (
@@ -900,7 +927,7 @@ export default function HomePage() {
         <p className="lead">{ui.lead}</p>
 
         <form className="request-form" onSubmit={submitCreate} dir={lang === "he" ? "rtl" : "ltr"}>
-          <label htmlFor="youtube">{ui.step1}</label>
+          <label htmlFor="youtube" className="youtube-step-label">{ui.step1}</label>
           <div className="search-input-wrap">
             <input
               id="youtube"
@@ -969,6 +996,7 @@ export default function HomePage() {
           ) : null}
 
           <div className="wa-row" dir="ltr">
+            <span className="wa-row-icon" aria-hidden="true">WA</span>
             <select
               className="wa-area-code"
               value={phoneAreaCode}
@@ -1049,18 +1077,15 @@ export default function HomePage() {
             style={{
               border: "none",
               width: "100%",
-              minHeight: "200px",
-              borderRadius: "12px",
-              background: "transparent",
             }}
             title="Payment Form"
-            sandbox="allow-forms allow-popups allow-same-origin"
+            sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
           />
         ) : null}
 
         {currentPreviewVideoId ? (
           <div className="preview-wrap">
-            <p className="preview-label">Clip preview</p>
+            <p className="preview-label">{ui.clipPreview}</p>
             <iframe
               ref={previewIframeRef}
               key={`${currentPreviewVideoId}-${previewNonce}`}
@@ -1074,15 +1099,15 @@ export default function HomePage() {
         ) : null}
 
         <div className="examples-panel">
-          <h2>Example Songs</h2>
+          <h2>{ui.examplesTitle}</h2>
           <div className="examples-table-wrap">
             <table className="examples-table">
               <thead>
                 <tr>
-                  <th>TITLE</th>
-                  <th>MIX</th>
-                  <th>KAR</th>
-                  <th>VOC</th>
+                  <th>{ui.colTitle}</th>
+                  <th>{ui.colMix}</th>
+                  <th>{ui.colKar}</th>
+                  <th>{ui.colVoc}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1110,7 +1135,7 @@ export default function HomePage() {
                         aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "mix"}
                         title="Play input YouTube mix"
                       >
-                        MIX
+                        {ui.colMix}
                       </button>
                     </td>
                     <td>
@@ -1128,7 +1153,7 @@ export default function HomePage() {
                         disabled={loadingInputLinks || !videoId}
                         title="Play input YouTube mix"
                       >
-                        KAR
+                        {ui.colKar}
                       </button>
                     </td>
                     <td>
@@ -1144,7 +1169,7 @@ export default function HomePage() {
                         disabled={!inputVocUrl || loadingInputLinks}
                         title="Play input vocals"
                       >
-                        VOC
+                        {ui.colVoc}
                       </button>
                     </td>
                   </tr>
@@ -1176,7 +1201,7 @@ export default function HomePage() {
                           aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
                         title="Play YouTube mix (original track)"
                       >
-                        MIX
+                        {ui.colMix}
                       </button>
                     </td>
                     <td>
@@ -1191,7 +1216,7 @@ export default function HomePage() {
                           aria-pressed={idx === activeExampleIndex && activeSource === "kar"}
                         title="Play karaoke instrumental"
                       >
-                        KAR
+                        {ui.colKar}
                       </button>
                     </td>
                     <td>
@@ -1206,7 +1231,7 @@ export default function HomePage() {
                           aria-pressed={idx === activeExampleIndex && activeSource === "voc"}
                         title="Play vocals only"
                       >
-                        VOC
+                        {ui.colVoc}
                       </button>
                     </td>
                   </tr>
@@ -1217,16 +1242,16 @@ export default function HomePage() {
 
           <div className="mini-player-wrap">
             <p className="field-hint">
-              Now Playing: {activeExample.title} ({activeSource.toUpperCase()})
+              {ui.nowPlaying}: {activeExample.title} ({sourceLabel[activeSource] || activeSource.toUpperCase()})
             </p>
-            <p className="field-hint">Sync time: {syncClock} (example: 1:23)</p>
+            <p className="field-hint">{ui.syncTime}: {syncClock} (example: 1:23)</p>
             <div className="sync-controls" role="group" aria-label="Playback controls">
               <button
                 type="button"
                 className="sync-play-btn"
                 onClick={togglePlayPause}
               >
-                {isPlaying ? "Pause" : "Play"}
+                {isPlaying ? ui.pause : ui.play}
               </button>
               <input
                 type="range"
