@@ -1079,7 +1079,7 @@ export default function HomePage() {
               width: "100%",
             }}
             title="Payment Form"
-            sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+            sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
           />
         ) : null}
 

@@ -12,6 +12,71 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
   const [karaokeUrl, setKaraokeUrl] = useState("");
   const [vocalsUrl, setVocalsUrl] = useState("");
   const waSentRef = useRef(false);
+  const karaokeAudioRef = useRef(null);
+  const vocalsAudioRef = useRef(null);
+  const isSyncingRef = useRef(false);
+
+  const getAudioPair = (source) => {
+    const primary = source === "karaoke" ? karaokeAudioRef.current : vocalsAudioRef.current;
+    const secondary = source === "karaoke" ? vocalsAudioRef.current : karaokeAudioRef.current;
+    return { primary, secondary };
+  };
+
+  const syncCurrentTime = (source) => {
+    if (isSyncingRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary || !secondary) return;
+
+    const drift = Math.abs((secondary.currentTime || 0) - (primary.currentTime || 0));
+    if (drift < 0.2) return;
+
+    isSyncingRef.current = true;
+    secondary.currentTime = primary.currentTime || 0;
+    isSyncingRef.current = false;
+  };
+
+  const playSynced = async (source) => {
+    if (isSyncingRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary || !secondary) return;
+
+    isSyncingRef.current = true;
+    const startAt = primary.currentTime || 0;
+
+    secondary.currentTime = startAt;
+    primary.playbackRate = secondary.playbackRate;
+
+    // Start in A/B mode: pressed source audible, the other muted.
+    primary.muted = false;
+    secondary.muted = true;
+
+    try {
+      await Promise.allSettled([primary.play(), secondary.play()]);
+    } finally {
+      isSyncingRef.current = false;
+    }
+  };
+
+  const pauseSynced = (source) => {
+    if (isSyncingRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary || !secondary) return;
+
+    isSyncingRef.current = true;
+    primary.pause();
+    secondary.pause();
+    isSyncingRef.current = false;
+  };
+
+  const seekSynced = (source) => {
+    if (isSyncingRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary || !secondary) return;
+
+    isSyncingRef.current = true;
+    secondary.currentTime = primary.currentTime || 0;
+    isSyncingRef.current = false;
+  };
 
   const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
 
@@ -178,10 +243,32 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
                 {karaokeUrl && (
                   <>
                     <audio
+                      ref={karaokeAudioRef}
                       controls
                       src={karaokeUrl}
                       className="inline-audio"
                       preload="none"
+                      onPlay={() => {
+                        playSynced("karaoke");
+                      }}
+                      onPause={() => {
+                        pauseSynced("karaoke");
+                      }}
+                      onSeeking={() => {
+                        seekSynced("karaoke");
+                      }}
+                      onTimeUpdate={() => {
+                        syncCurrentTime("karaoke");
+                      }}
+                      onRateChange={() => {
+                        const vocals = vocalsAudioRef.current;
+                        if (vocals && karaokeAudioRef.current && !isSyncingRef.current) {
+                          vocals.playbackRate = karaokeAudioRef.current.playbackRate;
+                        }
+                      }}
+                      onEnded={() => {
+                        pauseSynced("karaoke");
+                      }}
                     />
                     <a
                       href={karaokeUrl}
@@ -203,10 +290,32 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone })
                 {vocalsUrl && (
                   <>
                     <audio
+                      ref={vocalsAudioRef}
                       controls
                       src={vocalsUrl}
                       className="inline-audio"
                       preload="none"
+                      onPlay={() => {
+                        playSynced("vocals");
+                      }}
+                      onPause={() => {
+                        pauseSynced("vocals");
+                      }}
+                      onSeeking={() => {
+                        seekSynced("vocals");
+                      }}
+                      onTimeUpdate={() => {
+                        syncCurrentTime("vocals");
+                      }}
+                      onRateChange={() => {
+                        const karaoke = karaokeAudioRef.current;
+                        if (karaoke && vocalsAudioRef.current && !isSyncingRef.current) {
+                          karaoke.playbackRate = vocalsAudioRef.current.playbackRate;
+                        }
+                      }}
+                      onEnded={() => {
+                        pauseSynced("vocals");
+                      }}
                     />
                     <a
                       href={vocalsUrl}
