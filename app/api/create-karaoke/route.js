@@ -37,6 +37,8 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const youtubeUrl = body?.youtubeUrl || "";
+    const fromPhone = String(body?.fromPhone || "").trim();
+    const userLang = body?.userLang === "HE" || body?.userLang === "he" ? "HE" : "EN";
 
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
@@ -62,6 +64,8 @@ export async function POST(request) {
         playlistName: null,
         source: "spotit-FE",
         kind: "karaoke-missing",
+        fromPhone: fromPhone || null,
+        userLang,
       },
     };
 

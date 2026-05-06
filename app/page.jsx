@@ -833,6 +833,7 @@ export default function HomePage() {
           phoneNumber: normalizedPhone,
           youtubeUrl,
           videoId,
+          lang,
         }),
       });
 

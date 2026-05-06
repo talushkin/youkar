@@ -4,10 +4,60 @@ import { useEffect, useRef, useState } from "react";
 
 const CDN_BASE = "https://d23du7ibe4a1ni.cloudfront.net";
 
+const copy = {
+  he: {
+    dir: "rtl",
+    thankYou: "🎉 תודה על הרכישה!",
+    lead: "קבצי הקריוקי והווקאל שלך מוכנים בקרוב.",
+    pendingInit: "התשלום אושר! מכין את קבצי הקריוקי שלך…",
+    pendingPoll: "עדיין מעבד… הדף יתעדכן אוטומטית.",
+    ready: "הקבצים שלך מוכנים! 🎤",
+    preparingCdn: "מכין קבצים… בדיקה כל 5 שניות.",
+    yourFiles: "הקבצים שלך",
+    karaokeLabel: "🎵 קריוקי (ללא ווקאל)",
+    vocalsLabel: "🎤 ווקאל בלבד",
+    download: "הורד",
+    backHome: "← צור קריוקי נוסף",
+    paymentFailed: "❌ התשלום נכשל",
+    returnToPayment: "← חזור לתשלום",
+    missingVideoId: "חסר מזהה וידאו. אנא חזור לדף הבית ונסה שוב.",
+    songPreview: "תצוגת שיר",
+    errorFallback: "לא ניתן לאמת את סטטוס הקובץ. הקישורים מוצגים בכל מקרה.",
+  },
+  en: {
+    dir: "ltr",
+    thankYou: "🎉 Thank You for Your Purchase!",
+    lead: "Your karaoke & vocals files are being prepared below.",
+    pendingInit: "Payment confirmed! Preparing your karaoke files…",
+    pendingPoll: "Still processing… we'll update this page automatically.",
+    ready: "Your files are ready! 🎤",
+    preparingCdn: "Preparing your CDN files… checking every 5 seconds.",
+    yourFiles: "Your Files",
+    karaokeLabel: "🎵 Karaoke (no vocals)",
+    vocalsLabel: "🎤 Vocals only",
+    download: "Download",
+    backHome: "← Create another karaoke",
+    paymentFailed: "❌ Payment Failed",
+    returnToPayment: "← Return to Payment",
+    missingVideoId: "Missing video ID. Please return to the home page and try again.",
+    songPreview: "Song preview",
+    errorFallback: "Could not verify file status. Links are shown below anyway.",
+  },
+};
+
 export default function AfterPaymentClient({ videoId, errorDescription, phone, title }) {
+  const [lang, setLang] = useState("he");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("youkar-lang");
+    if (stored === "en" || stored === "he") setLang(stored);
+  }, []);
+
+  const ui = copy[lang] || copy.he;
+
   const [status, setStatus] = useState({
     type: "pending",
-    message: "Payment confirmed! Preparing your karaoke files…",
+    message: ui.pendingInit,
   });
   const [karaokeUrl, setKaraokeUrl] = useState("");
   const [vocalsUrl, setVocalsUrl] = useState("");

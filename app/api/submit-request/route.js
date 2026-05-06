@@ -99,6 +99,7 @@ export async function POST(request) {
     const phoneAreaCode = String(body?.phoneAreaCode || "").trim();
     const localNumber = String(body?.localNumber || "").trim();
     const phoneNumber = String(body?.phoneNumber || "").trim();
+    const userLang = body?.lang === "he" ? "HE" : "EN";
 
     let localPhone = "";
     if (/^05[0-8]$/.test(phoneAreaCode) && /^\d{7}$/.test(localNumber)) {
@@ -148,6 +149,8 @@ export async function POST(request) {
       youtubeUrl: normalizedYoutubeUrl,
       videoId,
       source: "youkar-web",
+      fromPhone: whatsappPhone,
+      userLang,
     };
 
     const response = await fetch(submitUrl, {
