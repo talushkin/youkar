@@ -98,7 +98,9 @@ export default function HomePage() {
   const previewIframeRef = useRef(null);
   const previewTimeRef = useRef(0);
   const previewDurationRef = useRef(0);
-  const audioRef = useRef(null);
+  const karAudioRef = useRef(null);
+  const vocAudioRef = useRef(null);
+  const isSyncingAudioRef = useRef(false);
   const createButtonRef = useRef(null);
   const createHintTimerRef = useRef(null);
   const pendingActionRef = useRef(null);
@@ -254,6 +256,60 @@ export default function HomePage() {
     sendPreviewCommand("setVolume", [100]);
   };
 
+  const getAudioPair = (source) => {
+    const primary = source === "voc" ? vocAudioRef.current : karAudioRef.current;
+    const secondary = source === "voc" ? karAudioRef.current : vocAudioRef.current;
+    return { primary, secondary };
+  };
+
+  const playSynced = (source, startAt = null) => {
+    if (isSyncingAudioRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary) return;
+    isSyncingAudioRef.current = true;
+    const t = startAt !== null ? startAt : (primary.currentTime || 0);
+    primary.currentTime = t;
+    if (secondary) secondary.currentTime = t;
+    primary.muted = false;
+    if (secondary) secondary.muted = true;
+    const plays = [primary.play()];
+    if (secondary && secondary.src) plays.push(secondary.play());
+    Promise.allSettled(plays).then(() => {
+      isSyncingAudioRef.current = false;
+      setIsPlaying(true);
+      sendPreviewCommand("seekTo", [t, true]);
+      sendPreviewCommand("playVideo");
+    });
+  };
+
+  const pauseSynced = () => {
+    karAudioRef.current?.pause();
+    vocAudioRef.current?.pause();
+    sendPreviewCommand("pauseVideo");
+    setIsPlaying(false);
+  };
+
+  const seekSynced = (source) => {
+    if (isSyncingAudioRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary || !secondary) return;
+    isSyncingAudioRef.current = true;
+    secondary.currentTime = primary.currentTime || 0;
+    isSyncingAudioRef.current = false;
+    sendPreviewCommand("seekTo", [primary.currentTime || 0, true]);
+  };
+
+  const driftSync = (source) => {
+    if (isSyncingAudioRef.current) return;
+    const { primary, secondary } = getAudioPair(source);
+    if (!primary || !secondary) return;
+    const drift = Math.abs((secondary.currentTime || 0) - (primary.currentTime || 0));
+    if (drift < 0.25) return;
+    isSyncingAudioRef.current = true;
+    secondary.currentTime = primary.currentTime || 0;
+    isSyncingAudioRef.current = false;
+  };
+
   const promptCreateAction = () => {
     setShowCreateHint(true);
     if (createHintTimerRef.current) {
@@ -277,10 +333,9 @@ export default function HomePage() {
       return Number.isFinite(time) ? time : sharedTimeRef.current;
     }
 
-    if (audioRef.current) {
-      return Number.isFinite(audioRef.current.currentTime)
-        ? audioRef.current.currentTime
-        : sharedTimeRef.current;
+    const ref = activeSource === "voc" ? vocAudioRef.current : karAudioRef.current;
+    if (ref) {
+      return Number.isFinite(ref.currentTime) ? ref.currentTime : sharedTimeRef.current;
     }
 
     return sharedTimeRef.current;
@@ -293,10 +348,10 @@ export default function HomePage() {
       return;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    }
+    karAudioRef.current?.pause();
+    vocAudioRef.current?.pause();
+    sendPreviewCommand("pauseVideo");
+    setIsPlaying(false);
   };
 
   const ensureMixPlayback = () => {
@@ -345,7 +400,7 @@ export default function HomePage() {
       return;
     }
 
-    if ((source === "kar" || source === "voc") && !audioRef.current) {
+    if ((source === "kar" || source === "voc") && !karAudioRef.current) {
       return;
     }
 
@@ -359,25 +414,31 @@ export default function HomePage() {
     if (source === "mix") {
       const nextVideoId = extractVideoId(song.youtube);
       autoplayPreview(nextVideoId);
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      karAudioRef.current?.pause();
+      vocAudioRef.current?.pause();
       setIsPlaying(true);
-    } else if (audioRef.current) {
-      const nextSrc = source === "kar" ? song.karaoke : song.vocals;
-      audioRef.current.src = nextSrc;
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(() => {
-        setIsPlaying(false);
-      });
+    } else if (karAudioRef.current && vocAudioRef.current) {
+      karAudioRef.current.src = song.karaoke;
+      vocAudioRef.current.src = song.vocals;
+      playSynced(source, 0);
     }
 
     pendingActionRef.current = null;
   };
 
   const handleExamplePlay = (songIndex, source) => {
+    // Swap kar↔voc on same song: just toggle muted without reloading
+    if (
+      songIndex === activeExampleIndex &&
+      (source === "kar" || source === "voc") &&
+      (activeSource === "kar" || activeSource === "voc")
+    ) {
+      setActiveSource(source);
+      if (karAudioRef.current) karAudioRef.current.muted = source !== "kar";
+      if (vocAudioRef.current) vocAudioRef.current.muted = source !== "voc";
+      return;
+    }
+
     if (source === "kar" || source === "voc") {
       const nextVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
       autoplayPreview(nextVideoId, 0, true);
@@ -479,9 +540,16 @@ export default function HomePage() {
           updateSyncPosition(t);
         }
       } else {
-        updateSyncPosition(sharedTimeRef.current);
-        if (audioRef.current?.duration && Number.isFinite(audioRef.current.duration)) {
-          updateSyncDuration(audioRef.current.duration);
+        const primaryAudio = activeSource === "voc" ? vocAudioRef.current : karAudioRef.current;
+        if (primaryAudio) {
+          const t = primaryAudio.currentTime;
+          if (Number.isFinite(t)) updateSyncPosition(t);
+          if (Number.isFinite(primaryAudio.duration) && primaryAudio.duration > 0) {
+            updateSyncDuration(primaryAudio.duration);
+          }
+          // YT time sync is handled only on play/pause/seek events, not here
+        } else {
+          updateSyncPosition(sharedTimeRef.current);
         }
       }
     }, 500);
@@ -491,19 +559,22 @@ export default function HomePage() {
     };
   }, [activeSource]);
 
-  const onAudioTimeUpdate = () => {
-    if (activeSource !== "mix" && audioRef.current) {
-      updateSyncPosition(audioRef.current.currentTime);
-      if (audioRef.current.duration && Number.isFinite(audioRef.current.duration)) {
-        updateSyncDuration(audioRef.current.duration);
+  const onAudioTimeUpdate = (source) => {
+    if (activeSource === "mix") return;
+    const ref = source === "voc" ? vocAudioRef.current : karAudioRef.current;
+    if (ref && activeSource === source) {
+      updateSyncPosition(ref.currentTime);
+      if (Number.isFinite(ref.duration) && ref.duration > 0) {
+        updateSyncDuration(ref.duration);
       }
+      driftSync(source);
     }
   };
 
-  const onAudioLoadedMetadata = () => {
-    if (!audioRef.current) return;
-    if (audioRef.current.duration && Number.isFinite(audioRef.current.duration)) {
-      updateSyncDuration(audioRef.current.duration);
+  const onAudioLoadedMetadata = (source) => {
+    const ref = source === "voc" ? vocAudioRef.current : karAudioRef.current;
+    if (ref && Number.isFinite(ref.duration) && ref.duration > 0) {
+      if (activeSource === source) updateSyncDuration(ref.duration);
     }
   };
 
@@ -734,19 +805,25 @@ export default function HomePage() {
       return;
     }
 
-    const nextSrc = sourceToPlay === "kar" ? inputKarUrl : inputVocUrl;
-    if (!audioRef.current || !nextSrc) {
-      setIsPlaying(false);
+    // If both CDN files exist, play them synced
+    if (inputKarUrl && inputVocUrl && karAudioRef.current && vocAudioRef.current) {
+      karAudioRef.current.src = inputKarUrl;
+      vocAudioRef.current.src = inputVocUrl;
+      playSynced(sourceToPlay, 0);
       return;
     }
 
-    audioRef.current.src = nextSrc;
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().then(() => {
-      setIsPlaying(true);
-    }).catch(() => {
+    const nextSrc = sourceToPlay === "kar" ? inputKarUrl : inputVocUrl;
+    if (!nextSrc) {
       setIsPlaying(false);
-    });
+      return;
+    }
+    if (karAudioRef.current) {
+      karAudioRef.current.src = nextSrc;
+      karAudioRef.current.currentTime = 0;
+      karAudioRef.current.muted = false;
+      karAudioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
   };
 
   const handleSongPick = (song) => {
@@ -779,9 +856,9 @@ export default function HomePage() {
       return;
     }
 
-    if (audioRef.current) {
-      audioRef.current.currentTime = next;
-    }
+    if (karAudioRef.current) karAudioRef.current.currentTime = next;
+    if (vocAudioRef.current) vocAudioRef.current.currentTime = next;
+    sendPreviewCommand("seekTo", [next, true]);
   };
 
   const togglePlayPause = () => {
@@ -797,18 +874,11 @@ export default function HomePage() {
       return;
     }
 
-    if (!audioRef.current) return;
     if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
+      pauseSynced();
       return;
     }
-
-    audioRef.current.play().then(() => {
-      setIsPlaying(true);
-    }).catch(() => {
-      setIsPlaying(false);
-    });
+    playSynced(activeSource);
   };
 
   const createKaraoke = async () => {
@@ -1241,43 +1311,63 @@ export default function HomePage() {
           </div>
 
           <div className="mini-player-wrap">
-            <p className="field-hint">
-              {ui.nowPlaying}: {activeExample.title} ({sourceLabel[activeSource] || activeSource.toUpperCase()})
+            <p className="field-hint" style={{ marginBottom: "8px" }}>
+              {ui.nowPlaying}: {activeExample.title}
             </p>
-            <p className="field-hint">{ui.syncTime}: {syncClock} (example: 1:23)</p>
-            <div className="sync-controls" role="group" aria-label="Playback controls">
-              <button
-                type="button"
-                className="sync-play-btn"
-                onClick={togglePlayPause}
-              >
-                {isPlaying ? ui.pause : ui.play}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max={Math.max(1, Math.floor(syncDuration || 0))}
-                step="1"
-                value={Math.min(Math.floor(syncSeconds || 0), Math.max(1, Math.floor(syncDuration || 0)))}
-                onChange={onSyncSeek}
-                className="sync-slider"
-                aria-label="Playback position"
-              />
-              <p className="sync-time">
-                {formatClock(syncSeconds)} / {formatClock(syncDuration)}
-              </p>
+
+            <div className="download-links">
+              {/* Karaoke channel */}
+              <div className="download-row">
+                <span className="download-label">🎵 {ui.colKar}</span>
+                <div className="download-actions">
+                  <audio
+                    ref={karAudioRef}
+                    controls
+                    src={activeExample?.karaoke || ""}
+                    className="inline-audio"
+                    preload="none"
+                    onPlay={() => playSynced("kar")}
+                    onPause={() => pauseSynced()}
+                    onSeeking={() => seekSynced("kar")}
+                    onTimeUpdate={() => onAudioTimeUpdate("kar")}
+                    onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
+                    onRateChange={() => {
+                      if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
+                        vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
+                    }}
+                    onEnded={() => pauseSynced()}
+                  />
+                </div>
+              </div>
+
+              {/* Vocals channel */}
+              <div className="download-row">
+                <span className="download-label">🎤 {ui.colVoc}</span>
+                <div className="download-actions">
+                  <audio
+                    ref={vocAudioRef}
+                    controls
+                    src={activeExample?.vocals || ""}
+                    className="inline-audio"
+                    preload="none"
+                    onPlay={() => playSynced("voc")}
+                    onPause={() => pauseSynced()}
+                    onSeeking={() => seekSynced("voc")}
+                    onTimeUpdate={() => onAudioTimeUpdate("voc")}
+                    onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
+                    onRateChange={() => {
+                      if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
+                        karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
+                    }}
+                    onEnded={() => pauseSynced()}
+                  />
+                </div>
+              </div>
             </div>
+
             <div className="mini-player hidden-player" aria-hidden="true">
               <div ref={ytHostRef} />
             </div>
-            <audio
-              ref={audioRef}
-              className="tiny-audio hidden"
-              onTimeUpdate={onAudioTimeUpdate}
-              onLoadedMetadata={onAudioLoadedMetadata}
-              onPlay={onAudioPlay}
-              onPause={onAudioPause}
-            />
           </div>
         </div>
 
