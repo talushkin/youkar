@@ -85,6 +85,7 @@ export default function HomePage() {
     return DEFAULT_YT_QUERY.he;
   });
   const [songSearchResults, setSongSearchResults] = useState([]);
+  const [youtubeDisplayValue, setYoutubeDisplayValue] = useState("");
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
   const [showSongDropdown, setShowSongDropdown] = useState(false);
   const [phoneAreaCode, setPhoneAreaCode] = useState("050");
@@ -118,6 +119,7 @@ export default function HomePage() {
   const createHintTimerRef = useRef(null);
   const pendingActionRef = useRef(null);
   const sharedTimeRef = useRef(0);
+  const soloSourceRef = useRef(null);
 
   const [syncClock, setSyncClock] = useState("0:00");
   const [syncSeconds, setSyncSeconds] = useState(0);
@@ -127,6 +129,7 @@ export default function HomePage() {
   const [previewNonce, setPreviewNonce] = useState(0);
   const [previewMuted, setPreviewMuted] = useState(false);
   const [showCreateHint, setShowCreateHint] = useState(false);
+  const [soloSource, setSoloSource] = useState(null);
 
   const copy = {
     he: {
@@ -218,6 +221,7 @@ export default function HomePage() {
   const switchLanguage = (nextLang) => {
     setLang(nextLang);
     localStorage.setItem("youkar-lang", nextLang);
+    setYoutubeDisplayValue("");
     setYoutubeUrl((prev) => {
       const trimmed = String(prev || "").trim();
       const isDefaultSeed = trimmed === DEFAULT_YT_QUERY.he || trimmed === DEFAULT_YT_QUERY.en;
@@ -288,6 +292,25 @@ export default function HomePage() {
     return { primary, secondary };
   };
 
+  const applySoloMode = () => {
+    if (!karAudioRef.current || !vocAudioRef.current) return;
+
+    if (soloSourceRef.current === "kar") {
+      karAudioRef.current.muted = false;
+      vocAudioRef.current.muted = true;
+      return;
+    }
+
+    if (soloSourceRef.current === "voc") {
+      karAudioRef.current.muted = true;
+      vocAudioRef.current.muted = false;
+      return;
+    }
+
+    karAudioRef.current.muted = false;
+    vocAudioRef.current.muted = false;
+  };
+
   const playSynced = (source, startAt = null) => {
     if (isSyncingAudioRef.current) return;
     const { primary, secondary } = getAudioPair(source);
@@ -298,12 +321,14 @@ export default function HomePage() {
     if (secondary) secondary.currentTime = t;
     primary.muted = false;
     if (secondary) secondary.muted = false;
+
+    applySoloMode();
+
     const plays = [primary.play()];
     if (secondary && secondary.src) plays.push(secondary.play());
     Promise.allSettled(plays).then(() => {
       isSyncingAudioRef.current = false;
       setIsPlaying(true);
-      sendPreviewCommand("seekTo", [t, true]);
       sendPreviewCommand("playVideo");
     });
   };
@@ -322,7 +347,6 @@ export default function HomePage() {
     isSyncingAudioRef.current = true;
     secondary.currentTime = primary.currentTime || 0;
     isSyncingAudioRef.current = false;
-    sendPreviewCommand("seekTo", [primary.currentTime || 0, true]);
   };
 
   const driftSync = (source) => {
@@ -354,7 +378,7 @@ export default function HomePage() {
   };
 
   const readCurrentTime = () => {
-    if (activeSource === "mix" && ytPlayerRef.current?.getCurrentTime) {
+    if (ytPlayerRef.current?.getCurrentTime) {
       const time = Number(ytPlayerRef.current.getCurrentTime());
       return Number.isFinite(time) ? time : sharedTimeRef.current;
     }
@@ -438,12 +462,16 @@ export default function HomePage() {
     setActiveSource(source);
 
     if (source === "mix") {
+      soloSourceRef.current = null;
+      setSoloSource(null);
       const nextVideoId = extractVideoId(song.youtube);
       autoplayPreview(nextVideoId);
       karAudioRef.current?.pause();
       vocAudioRef.current?.pause();
       setIsPlaying(true);
     } else if (karAudioRef.current && vocAudioRef.current) {
+      soloSourceRef.current = source;
+      setSoloSource(source);
       karAudioRef.current.src = song.karaoke;
       vocAudioRef.current.src = song.vocals;
       playSynced(source, 0);
@@ -459,9 +487,10 @@ export default function HomePage() {
       (source === "kar" || source === "voc") &&
       (activeSource === "kar" || activeSource === "voc")
     ) {
+      soloSourceRef.current = source;
+      setSoloSource(source);
       setActiveSource(source);
-      if (karAudioRef.current) karAudioRef.current.muted = false;
-      if (vocAudioRef.current) vocAudioRef.current.muted = false;
+      applySoloMode();
       return;
     }
 
@@ -556,7 +585,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const tick = window.setInterval(() => {
-      if (activeSource === "mix" && ytPlayerRef.current?.getCurrentTime) {
+      if (ytPlayerRef.current?.getCurrentTime) {
         const t = Number(ytPlayerRef.current.getCurrentTime());
         const d = Number(ytPlayerRef.current.getDuration?.());
         if (Number.isFinite(d) && d > 0) {
@@ -862,6 +891,8 @@ export default function HomePage() {
     setActiveSource(sourceToPlay);
 
     if (sourceToPlay === "mix") {
+      soloSourceRef.current = null;
+      setSoloSource(null);
       unmutePreviewIframe();
       autoplayPreview(videoId);
       return;
@@ -869,6 +900,8 @@ export default function HomePage() {
 
     // If both CDN files exist, play them synced
     if (inputKarUrl && inputVocUrl && karAudioRef.current && vocAudioRef.current) {
+      soloSourceRef.current = sourceToPlay;
+      setSoloSource(sourceToPlay);
       karAudioRef.current.src = inputKarUrl;
       vocAudioRef.current.src = inputVocUrl;
       playSynced(sourceToPlay, 0);
@@ -892,7 +925,12 @@ export default function HomePage() {
     const nextUrl = String(song?.youtubeUrl || "");
     const nextVideoId = extractVideoId(nextUrl);
 
+    const nextDisplay = [String(song?.title || "").trim(), String(song?.duration || "").trim()]
+      .filter(Boolean)
+      .join(" / ");
+
     setYoutubeUrl(nextUrl);
+    setYoutubeDisplayValue(nextDisplay || nextUrl);
     if (nextVideoId) {
       pauseCurrent();
     }
@@ -925,9 +963,29 @@ export default function HomePage() {
 
   const selectSyncChannel = (source) => {
     if (source !== "kar" && source !== "voc") return;
+    const t = readCurrentTime();
+    const shouldKeepPlaying = isPlaying;
+    const nextSolo = soloSource === source ? null : source;
+    soloSourceRef.current = nextSolo;
+    setSoloSource(nextSolo);
     setActiveSource(source);
     mutePreviewIframe();
-    playSynced(source, readCurrentTime());
+
+    if (karAudioRef.current) karAudioRef.current.currentTime = t;
+    if (vocAudioRef.current) vocAudioRef.current.currentTime = t;
+
+    if (shouldKeepPlaying) {
+      playSynced(source, t);
+      return;
+    }
+
+    applySoloMode();
+  };
+
+  const selectMixChannel = () => {
+    soloSourceRef.current = null;
+    setSoloSource(null);
+    applySoloMode();
   };
 
   const togglePlayPause = () => {
@@ -1079,11 +1137,12 @@ export default function HomePage() {
               id="youtube"
               type="text"
               placeholder={ui.searchPlaceholder}
-              value={youtubeUrl}
+              value={youtubeDisplayValue || youtubeUrl}
               onChange={(e) => {
                 const nextUrl = e.target.value;
                 const nextVideoId = extractVideoId(nextUrl);
 
+                setYoutubeDisplayValue("");
                 setYoutubeUrl(nextUrl);
                 if (nextVideoId) {
                   pauseCurrent();
@@ -1101,6 +1160,7 @@ export default function HomePage() {
                 aria-label="Clear YouTube input"
                 title="Clear"
                 onClick={() => {
+                  setYoutubeDisplayValue("");
                   setYoutubeUrl("");
                   setShowSongDropdown(false);
                   setSongSearchResults([]);
@@ -1150,16 +1210,6 @@ export default function HomePage() {
               </div>
             ) : null}
           </div>
-
-          {videoId && inputSongTitle ? (
-            <p className="yt-input-meta" dir={lang === "he" ? "rtl" : "ltr"}>
-              <span>{inputSongTitle}</span>
-              <span> / </span>
-              <span>{inputSongArtist || "Unknown artist"}</span>
-              <span> / </span>
-              <span>{inputSongDuration || "N/A"}</span>
-            </p>
-          ) : null}
 
           {isSearchingSongs ? (
             <p className="field-hint">{ui.searchLoading}</p>
@@ -1265,21 +1315,12 @@ export default function HomePage() {
               <div className="sync-source-icons" role="group" aria-label="Audio channels">
                 <button
                   type="button"
-                  className={`source-icon-btn karaoke-icon ${activeSource === "kar" ? "is-active" : ""}`}
-                  onClick={() => selectSyncChannel("kar")}
-                  aria-label={ui.colKar}
-                  title={ui.colKar}
+                  className={`source-icon-btn mix-icon ${soloSource === null ? "is-active" : ""}`}
+                  onClick={selectMixChannel}
+                  aria-label={ui.colMix}
+                  title={ui.colMix}
                 >
-                  🎵
-                </button>
-                <button
-                  type="button"
-                  className={`source-icon-btn vocals-icon ${activeSource === "voc" ? "is-active" : ""}`}
-                  onClick={() => selectSyncChannel("voc")}
-                  aria-label={ui.colVoc}
-                  title={ui.colVoc}
-                >
-                  🎤
+                  🔊
                 </button>
               </div>
               <button
@@ -1302,7 +1343,7 @@ export default function HomePage() {
               <p className="sync-time">{syncClock}</p>
             </div>
 
-            <div className="download-links">
+            <div className="download-links hidden-main-audio-players">
               <div className="download-row">
                 <span className="download-label">🎵 {ui.colKar}</span>
                 <div className="download-actions">
@@ -1393,38 +1434,10 @@ export default function HomePage() {
                       </button>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className={`mini-btn karaoke-btn ${
-                          activeExampleIndex === INPUT_ROW_INDEX
-                          && (activeSource === "kar" || (activeSource === "mix" && !inputKarUrl))
-                            ? "is-active"
-                            : ""
-                        }`}
-                        onClick={() => handleInputRowPlay("kar")}
-                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX
-                          && (activeSource === "kar" || (activeSource === "mix" && !inputKarUrl))}
-                        disabled={loadingInputLinks || !videoId}
-                        title="Play input YouTube mix"
-                      >
-                        {ui.colKar}
-                      </button>
+                      <span className="examples-cell-muted">-</span>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className={`mini-btn vocals-btn ${
-                          activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"
-                            ? "is-active"
-                            : ""
-                        }`}
-                        onClick={() => handleInputRowPlay("voc")}
-                        aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"}
-                        disabled={!inputVocUrl || loadingInputLinks}
-                        title="Play input vocals"
-                      >
-                        {ui.colVoc}
-                      </button>
+                      <span className="examples-cell-muted">-</span>
                     </td>
                   </tr>
                 ) : null}

@@ -125,6 +125,14 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.examples-cell-muted {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .mini-btn.is-active {
   border-width: 2px;
   font-weight: 800;
@@ -205,13 +213,22 @@ body {
 }
 
 .source-icon-btn.is-active.karaoke-icon {
-  background: rgba(252, 67, 54, 0.22);
-  border-color: rgba(252, 67, 54, 0.55);
+  background: rgba(44, 183, 255, 0.24);
+  border-color: rgba(44, 183, 255, 0.62);
 }
 
 .source-icon-btn.is-active.vocals-icon {
   background: rgba(44, 183, 255, 0.24);
   border-color: rgba(44, 183, 255, 0.62);
+}
+
+.source-icon-btn.is-active.mix-icon {
+  background: rgba(44, 183, 255, 0.24);
+  border-color: rgba(44, 183, 255, 0.62);
+}
+
+.download-links.hidden-main-audio-players {
+  display: none;
 }
 
 .sync-play-btn {
