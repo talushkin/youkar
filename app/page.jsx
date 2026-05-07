@@ -271,7 +271,7 @@ export default function HomePage() {
     primary.currentTime = t;
     if (secondary) secondary.currentTime = t;
     primary.muted = false;
-    if (secondary) secondary.muted = true;
+    if (secondary) secondary.muted = false;
     const plays = [primary.play()];
     if (secondary && secondary.src) plays.push(secondary.play());
     Promise.allSettled(plays).then(() => {
@@ -427,15 +427,15 @@ export default function HomePage() {
   };
 
   const handleExamplePlay = (songIndex, source) => {
-    // Swap kar↔voc on same song: just toggle muted without reloading
+    // Swap kar↔voc on same song without restarting playback.
     if (
       songIndex === activeExampleIndex &&
       (source === "kar" || source === "voc") &&
       (activeSource === "kar" || activeSource === "voc")
     ) {
       setActiveSource(source);
-      if (karAudioRef.current) karAudioRef.current.muted = source !== "kar";
-      if (vocAudioRef.current) vocAudioRef.current.muted = source !== "voc";
+      if (karAudioRef.current) karAudioRef.current.muted = false;
+      if (vocAudioRef.current) vocAudioRef.current.muted = false;
       return;
     }
 
@@ -782,7 +782,7 @@ export default function HomePage() {
       promptCreateAction();
     }
 
-    const sourceToPlay = source === "kar" ? "mix" : source;
+    const sourceToPlay = source;
 
     if (source === "kar" || source === "voc") {
       autoplayPreview(videoId, 0, true);
@@ -1169,6 +1169,75 @@ export default function HomePage() {
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
             />
+
+            <div className="sync-controls" dir="ltr">
+              <button
+                type="button"
+                className="sync-play-btn"
+                onClick={togglePlayPause}
+              >
+                {isPlaying ? ui.pause : ui.play}
+              </button>
+              <input
+                className="sync-slider"
+                type="range"
+                min="0"
+                max={Math.max(0, syncDuration)}
+                step="0.1"
+                value={Math.min(syncSeconds, Math.max(0, syncDuration))}
+                onChange={onSyncSeek}
+                aria-label={ui.syncTime}
+              />
+              <p className="sync-time">{syncClock}</p>
+            </div>
+
+            <div className="download-links">
+              <div className="download-row">
+                <span className="download-label">🎵 {ui.colKar}</span>
+                <div className="download-actions">
+                  <audio
+                    ref={karAudioRef}
+                    controls
+                    src={activeExample?.karaoke || ""}
+                    className="inline-audio"
+                    preload="none"
+                    onPlay={() => playSynced("kar")}
+                    onPause={() => pauseSynced()}
+                    onSeeking={() => seekSynced("kar")}
+                    onTimeUpdate={() => onAudioTimeUpdate("kar")}
+                    onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
+                    onRateChange={() => {
+                      if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
+                        vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
+                    }}
+                    onEnded={() => pauseSynced()}
+                  />
+                </div>
+              </div>
+
+              <div className="download-row">
+                <span className="download-label">🎤 {ui.colVoc}</span>
+                <div className="download-actions">
+                  <audio
+                    ref={vocAudioRef}
+                    controls
+                    src={activeExample?.vocals || ""}
+                    className="inline-audio"
+                    preload="none"
+                    onPlay={() => playSynced("voc")}
+                    onPause={() => pauseSynced()}
+                    onSeeking={() => seekSynced("voc")}
+                    onTimeUpdate={() => onAudioTimeUpdate("voc")}
+                    onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
+                    onRateChange={() => {
+                      if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
+                        karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
+                    }}
+                    onEnded={() => pauseSynced()}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -1318,57 +1387,6 @@ export default function HomePage() {
             <p className="field-hint" style={{ marginBottom: "8px" }}>
               {ui.nowPlaying}: {activeExample.title}
             </p>
-
-            <div className="download-links">
-              {/* Karaoke channel */}
-              <div className="download-row">
-                <span className="download-label">🎵 {ui.colKar}</span>
-                <div className="download-actions">
-                  <audio
-                    ref={karAudioRef}
-                    controls
-                    src={activeExample?.karaoke || ""}
-                    className="inline-audio"
-                    preload="none"
-                    onPlay={() => playSynced("kar")}
-                    onPause={() => pauseSynced()}
-                    onSeeking={() => seekSynced("kar")}
-                    onTimeUpdate={() => onAudioTimeUpdate("kar")}
-                    onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
-                    onRateChange={() => {
-                      if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
-                        vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
-                    }}
-                    onEnded={() => pauseSynced()}
-                  />
-                </div>
-              </div>
-
-              {/* Vocals channel */}
-              <div className="download-row">
-                <span className="download-label">🎤 {ui.colVoc}</span>
-                <div className="download-actions">
-                  <audio
-                    ref={vocAudioRef}
-                    controls
-                    src={activeExample?.vocals || ""}
-                    className="inline-audio"
-                    preload="none"
-                    onPlay={() => playSynced("voc")}
-                    onPause={() => pauseSynced()}
-                    onSeeking={() => seekSynced("voc")}
-                    onTimeUpdate={() => onAudioTimeUpdate("voc")}
-                    onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
-                    onRateChange={() => {
-                      if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
-                        karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
-                    }}
-                    onEnded={() => pauseSynced()}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="mini-player hidden-player" aria-hidden="true">
               <div ref={ytHostRef} />
             </div>
