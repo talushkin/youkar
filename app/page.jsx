@@ -656,6 +656,27 @@ export default function HomePage() {
     const timeoutId = window.setTimeout(async () => {
       setShowSongDropdown(true);
       setIsSearchingSongs(true);
+
+      const mappedExamples = EXAMPLE_SONGS
+        .map((song, index) => ({
+          id: `fallback-${index}-${song.youtube}`,
+          title: song.title,
+          artist: song.artist,
+          duration: song.duration,
+          youtubeUrl: song.youtube,
+        }));
+
+      const matchedFallbackSongs = mappedExamples
+        .filter((song) => {
+          const haystack = `${song.title} ${song.artist}`.toLowerCase();
+          return haystack.includes(query.toLowerCase());
+        })
+        .slice(0, 5);
+
+      const fallbackSongs = matchedFallbackSongs.length > 0
+        ? matchedFallbackSongs
+        : mappedExamples.slice(0, 5);
+
       try {
         const response = await fetch("/api/youtube/get-song-list", {
           method: "POST",
@@ -670,13 +691,14 @@ export default function HomePage() {
         }
 
         const nextResults = Array.isArray(data?.songs) ? data.songs.slice(0, 5) : [];
-        setSongSearchResults(nextResults);
-  setShowSongDropdown(true);
+        const finalResults = nextResults.length > 0 ? nextResults : fallbackSongs;
+        setSongSearchResults(finalResults);
+        setShowSongDropdown(true);
       } catch (error) {
         if (error?.name === "AbortError") {
           return;
         }
-        setSongSearchResults([]);
+        setSongSearchResults(fallbackSongs);
         setShowSongDropdown(true);
       } finally {
         setIsSearchingSongs(false);
@@ -1508,9 +1530,6 @@ export default function HomePage() {
           </div>
 
           <div className="mini-player-wrap">
-            <p className="field-hint" style={{ marginBottom: "8px" }}>
-              {ui.nowPlaying}: {activeExample.title}
-            </p>
             <div className="mini-player hidden-player" aria-hidden="true">
               <div ref={ytHostRef} />
             </div>

@@ -137,7 +137,15 @@ export async function POST(request) {
     }
 
     const payload = { title, artist, genre };
-    const songs = normalizeSongs(backendBody).slice(0, 5);
+    const songs = normalizeSongs(backendBody)
+      .sort((a, b) => {
+        const aDuration = parseDurationToSeconds(a.duration);
+        const bDuration = parseDurationToSeconds(b.duration);
+        const aRank = aDuration === null ? Number.POSITIVE_INFINITY : aDuration;
+        const bRank = bDuration === null ? Number.POSITIVE_INFINITY : bDuration;
+        return aRank - bRank;
+      })
+      .slice(0, 5);
     return NextResponse.json({ ok: true, songs, payload, backend: backendBody });
   } catch (error) {
     return NextResponse.json(
