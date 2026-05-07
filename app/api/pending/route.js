@@ -83,6 +83,8 @@ export async function POST(request) {
             playlistName: incomingMeta.playlistName ?? null,
             source: incomingMeta.source || "spotit-FE",
             kind: incomingMeta.kind || "karaoke-missing",
+            fromPhone: incomingMeta.fromPhone ?? null,
+            userLang: incomingMeta.userLang ?? null,
           },
         };
       })

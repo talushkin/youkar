@@ -920,6 +920,10 @@ export default function HomePage() {
             videoId,
             title: inputSongTitle || `YouTube ${videoId}`,
             duration: activeExample?.duration || "N/A",
+            meta: {
+              fromPhone: `972${normalizedPhone.slice(1)}`,
+              userLang: lang === "he" ? "HE" : "EN",
+            },
           },
         ]),
       });
