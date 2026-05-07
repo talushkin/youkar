@@ -713,7 +713,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!videoId) {
-      setPreviewVideoId("");
+      const defaultExampleVideoId = extractVideoId(EXAMPLE_SONGS[0]?.youtube || "");
+      setPreviewVideoId(defaultExampleVideoId || "");
       setInputSongTitle("");
       setInputSongArtist("");
       setInputSongDuration("");
@@ -1344,6 +1345,20 @@ export default function HomePage() {
                 >
                   🔊
                 </button>
+                <button
+                  type="button"
+                  className={`source-icon-btn karaoke-icon ${soloSource === "kar" ? "is-active" : ""}`}
+                  onClick={() => selectSyncChannel("kar")}
+                  aria-label={ui.colKar}
+                  title={ui.colKar}
+                />
+                <button
+                  type="button"
+                  className={`source-icon-btn vocals-icon ${soloSource === "voc" ? "is-active" : ""}`}
+                  onClick={() => selectSyncChannel("voc")}
+                  aria-label={ui.colVoc}
+                  title={ui.colVoc}
+                />
               </div>
               <button
                 type="button"
@@ -1456,10 +1471,42 @@ export default function HomePage() {
                       </button>
                     </td>
                     <td>
-                      <span className="examples-cell-muted">-</span>
+                      {inputKarUrl ? (
+                        <button
+                          type="button"
+                          className={`mini-btn karaoke-btn ${
+                            activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"
+                              ? "is-active"
+                              : ""
+                          }`}
+                          onClick={() => handleInputRowPlay("kar")}
+                          aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"}
+                          title="Play input karaoke instrumental"
+                        >
+                          {ui.colKar}
+                        </button>
+                      ) : (
+                        <span className="examples-cell-muted">-</span>
+                      )}
                     </td>
                     <td>
-                      <span className="examples-cell-muted">-</span>
+                      {inputVocUrl ? (
+                        <button
+                          type="button"
+                          className={`mini-btn vocals-btn ${
+                            activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"
+                              ? "is-active"
+                              : ""
+                          }`}
+                          onClick={() => handleInputRowPlay("voc")}
+                          aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"}
+                          title="Play input vocals only"
+                        >
+                          {ui.colVoc}
+                        </button>
+                      ) : (
+                        <span className="examples-cell-muted">-</span>
+                      )}
                     </td>
                   </tr>
                 ) : null}
