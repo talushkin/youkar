@@ -173,13 +173,45 @@ body {
 .sync-controls {
   margin-top: 8px;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   gap: 10px;
   align-items: center;
   padding: 8px 10px;
   border-radius: 999px;
   background: rgba(236, 242, 255, 0.92);
   color: #102848;
+}
+
+.sync-source-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-icon-btn {
+  margin-top: 0;
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+  border: 1px solid rgba(16, 40, 72, 0.25);
+  background: rgba(255, 255, 255, 0.86);
+  color: #102848;
+}
+
+.source-icon-btn.is-active.karaoke-icon {
+  background: rgba(252, 67, 54, 0.22);
+  border-color: rgba(252, 67, 54, 0.55);
+}
+
+.source-icon-btn.is-active.vocals-icon {
+  background: rgba(44, 183, 255, 0.24);
+  border-color: rgba(44, 183, 255, 0.62);
 }
 
 .sync-play-btn {
@@ -298,6 +330,49 @@ h2 {
   margin: 0 auto;
 }
 
+.search-input-wrap::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 18px 18px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fc4336' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='16.65' y1='16.65' x2='22' y2='22'/%3E%3C/svg%3E");
+}
+
+.clear-youtube-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 67, 54, 0.45);
+  background: rgba(252, 67, 54, 0.15);
+  color: #fc4336;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.clear-youtube-btn:hover:enabled {
+  transform: translateY(-50%);
+  background: rgba(252, 67, 54, 0.24);
+}
+
 .search-dropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -369,6 +444,16 @@ h2 {
   font-size: 0.9rem;
 }
 
+.yt-input-meta {
+  width: 90%;
+  margin: 6px auto 0;
+  font-size: 0.84rem;
+  color: #ffd8d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .preview-wrap {
   margin-top: 6px;
   padding: 12px;
@@ -406,6 +491,18 @@ input[type="tel"] {
   padding: 12px 14px;
 }
 
+#youtube {
+  padding-left: 40px;
+  padding-right: 40px;
+}
+
+#youtube:focus,
+#youtube:focus-visible {
+  outline: none;
+  border-color: #fc4336;
+  box-shadow: 0 0 0 2px rgba(252, 67, 54, 0.25);
+}
+
 .card.lang-he .request-form label,
 .card.lang-he .field-hint,
 .card.lang-he .result {
@@ -418,8 +515,18 @@ input[type="tel"] {
 
 .card.lang-he #youtube,
 .card.lang-he input[type="tel"] {
-  direction: ltr;
-  text-align: left;
+  direction: rtl;
+  text-align: right;
+}
+
+.card.lang-he .search-input-wrap::before {
+  left: auto;
+  right: 12px;
+}
+
+.card.lang-he .clear-youtube-btn {
+  right: auto;
+  left: 10px;
 }
 
 .wa-row {
@@ -845,7 +952,8 @@ button:disabled {
   .request-form,
   .youtube-step-label,
   .wa-row,
-  .create-cta-button {
+  .create-cta-button,
+  .yt-input-meta {
     width: 100%;
   }
 

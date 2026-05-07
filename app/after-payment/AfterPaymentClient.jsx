@@ -61,6 +61,10 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   });
   const [karaokeUrl, setKaraokeUrl] = useState("");
   const [vocalsUrl, setVocalsUrl] = useState("");
+  const [activeChannel, setActiveChannel] = useState("karaoke");
+  const [syncSeconds, setSyncSeconds] = useState(0);
+  const [syncDuration, setSyncDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const waStartSentRef = useRef(false);
   const waReadySentRef = useRef(false);
   const karaokeAudioRef = useRef(null);
@@ -73,10 +77,26 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     return { primary, secondary };
   };
 
+  const formatClock = (seconds) => {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    const minutes = Math.floor(safe / 60);
+    const remaining = safe % 60;
+    return `${minutes}:${String(remaining).padStart(2, "0")}`;
+  };
+
   const syncCurrentTime = (source) => {
     if (isSyncingRef.current) return;
     const { primary, secondary } = getAudioPair(source);
-    if (!primary || !secondary) return;
+    if (!primary) return;
+
+    if (Number.isFinite(primary.currentTime)) {
+      setSyncSeconds(primary.currentTime);
+    }
+    if (Number.isFinite(primary.duration) && primary.duration > 0) {
+      setSyncDuration(primary.duration);
+    }
+
+    if (!secondary) return;
 
     const drift = Math.abs((secondary.currentTime || 0) - (primary.currentTime || 0));
     if (drift < 0.2) return;
@@ -90,9 +110,11 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     if (isSyncingRef.current) return;
     const { primary, secondary } = getAudioPair(source);
     if (!primary || !secondary) return;
+    setActiveChannel(source);
 
     isSyncingRef.current = true;
     const startAt = primary.currentTime || 0;
+    setSyncSeconds(startAt);
 
     secondary.currentTime = startAt;
     primary.playbackRate = secondary.playbackRate;
@@ -103,6 +125,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
 
     try {
       await Promise.allSettled([primary.play(), secondary.play()]);
+      setIsPlaying(true);
     } finally {
       isSyncingRef.current = false;
     }
@@ -117,6 +140,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     primary.pause();
     secondary.pause();
     isSyncingRef.current = false;
+    setIsPlaying(false);
   };
 
   const seekSynced = (source) => {
@@ -127,6 +151,27 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     isSyncingRef.current = true;
     secondary.currentTime = primary.currentTime || 0;
     isSyncingRef.current = false;
+    setSyncSeconds(primary.currentTime || 0);
+  };
+
+  const onSyncSeek = (e) => {
+    const next = Math.max(0, Number(e.target.value) || 0);
+    setSyncSeconds(next);
+    if (karaokeAudioRef.current) karaokeAudioRef.current.currentTime = next;
+    if (vocalsAudioRef.current) vocalsAudioRef.current.currentTime = next;
+  };
+
+  const togglePlayPause = () => {
+    if (isPlaying) {
+      pauseSynced(activeChannel);
+      return;
+    }
+    playSynced(activeChannel);
+  };
+
+  const selectChannel = (source) => {
+    setActiveChannel(source);
+    playSynced(source);
   };
 
   const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
@@ -339,8 +384,45 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           <div className="download-links">
             <h2>Your Files</h2>
 
+            <div className="sync-controls" dir="ltr">
+              <div className="sync-source-icons" role="group" aria-label="Audio channels">
+                <button
+                  type="button"
+                  className={`source-icon-btn karaoke-icon ${activeChannel === "karaoke" ? "is-active" : ""}`}
+                  onClick={() => selectChannel("karaoke")}
+                  aria-label="Karaoke"
+                  title="Karaoke"
+                >
+                  🎵
+                </button>
+                <button
+                  type="button"
+                  className={`source-icon-btn vocals-icon ${activeChannel === "vocals" ? "is-active" : ""}`}
+                  onClick={() => selectChannel("vocals")}
+                  aria-label="Vocals"
+                  title="Vocals"
+                >
+                  🎤
+                </button>
+              </div>
+              <button type="button" className="sync-play-btn" onClick={togglePlayPause}>
+                {isPlaying ? "Pause" : "Play"}
+              </button>
+              <input
+                className="sync-slider"
+                type="range"
+                min="0"
+                max={Math.max(0, syncDuration)}
+                step="0.1"
+                value={Math.min(syncSeconds, Math.max(0, syncDuration))}
+                onChange={onSyncSeek}
+                aria-label="Sync seek"
+              />
+              <p className="sync-time">{formatClock(syncSeconds)}</p>
+            </div>
+
             <div className="download-row">
-              <span className="download-label">🎵 Karaoke (no vocals)</span>
+              <span className="download-label" aria-hidden="true">🎵</span>
               <div className="download-actions">
                 {karaokeUrl && (
                   <>
@@ -371,6 +453,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                       onEnded={() => {
                         pauseSynced("karaoke");
                       }}
+                      onLoadedMetadata={() => {
+                        const duration = karaokeAudioRef.current?.duration;
+                        if (Number.isFinite(duration) && duration > 0) {
+                          setSyncDuration(duration);
+                        }
+                      }}
                     />
                     <a
                       href={karaokeUrl}
@@ -387,7 +475,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
             </div>
 
             <div className="download-row">
-              <span className="download-label">🎤 Vocals only</span>
+              <span className="download-label" aria-hidden="true">🎤</span>
               <div className="download-actions">
                 {vocalsUrl && (
                   <>
@@ -417,6 +505,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                       }}
                       onEnded={() => {
                         pauseSynced("vocals");
+                      }}
+                      onLoadedMetadata={() => {
+                        const duration = vocalsAudioRef.current?.duration;
+                        if (Number.isFinite(duration) && duration > 0) {
+                          setSyncDuration(duration);
+                        }
                       }}
                     />
                     <a

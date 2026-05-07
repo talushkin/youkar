@@ -6,6 +6,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const returnUrlBase =
   process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
 
+const DEFAULT_YT_QUERY = {
+  he: "שלמה ארצי",
+  en: "eric clepton",
+};
+
 const EXAMPLE_SONGS = [
   {
     title: "חנן בן ארי - אם תרצי (קליפ רשמי) Hanan Ben Ari",
@@ -72,7 +77,13 @@ export default function HomePage() {
     }
     return "he";
   });
-  const [youtubeUrl, setYoutubeUrl] = useState("erik clepton");
+  const [youtubeUrl, setYoutubeUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedLang = localStorage.getItem("youkar-lang") || "he";
+      return DEFAULT_YT_QUERY[storedLang] || DEFAULT_YT_QUERY.he;
+    }
+    return DEFAULT_YT_QUERY.he;
+  });
   const [songSearchResults, setSongSearchResults] = useState([]);
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
   const [showSongDropdown, setShowSongDropdown] = useState(false);
@@ -83,6 +94,8 @@ export default function HomePage() {
   const [queuedVideoId, setQueuedVideoId] = useState("");
   const [songTitle, setSongTitle] = useState("");
   const [inputSongTitle, setInputSongTitle] = useState("");
+  const [inputSongArtist, setInputSongArtist] = useState("");
+  const [inputSongDuration, setInputSongDuration] = useState("");
   const [inputKarUrl, setInputKarUrl] = useState("");
   const [inputVocUrl, setInputVocUrl] = useState("");
   const [loadingInputLinks, setLoadingInputLinks] = useState(false);
@@ -120,7 +133,7 @@ export default function HomePage() {
       headline: "קריוקי לכל יוטיוב תוך שניות",
       lead: "הדבקה, אימות ויצירת בקשה לקריוקי במהירות.",
       step1: "לינק/חיפוש יוטיוב",
-      searchPlaceholder: "הדבק לינק יוטיוב או חפש שיר...",
+      searchPlaceholder: "Search YouTube or paste link here",
       searchLoading: "מחפש שירים...",
       noResults: "לא נמצאו תוצאות",
       invalidYoutube: "נא להכניס לינק YouTube תקין.",
@@ -147,7 +160,7 @@ export default function HomePage() {
       headline: "Any YOUTUBE link to a karaoke playback in just a few sec!",
       lead: "Paste, verify, and create your karaoke request in seconds.",
       step1: "YouTube Song Link/Search",
-      searchPlaceholder: "Paste YouTube URL or search song title...",
+      searchPlaceholder: "Search YouTube or paste link here",
       searchLoading: "Searching songs...",
       noResults: "No results found",
       invalidYoutube: "Please use a valid YouTube URL.",
@@ -201,6 +214,19 @@ export default function HomePage() {
       vocals: inputVocUrl,
     }
     : EXAMPLE_SONGS[activeExampleIndex];
+
+  const switchLanguage = (nextLang) => {
+    setLang(nextLang);
+    localStorage.setItem("youkar-lang", nextLang);
+    setYoutubeUrl((prev) => {
+      const trimmed = String(prev || "").trim();
+      const isDefaultSeed = trimmed === DEFAULT_YT_QUERY.he || trimmed === DEFAULT_YT_QUERY.en;
+      if (!trimmed || isDefaultSeed) {
+        return DEFAULT_YT_QUERY[nextLang] || DEFAULT_YT_QUERY.en;
+      }
+      return prev;
+    });
+  };
 
   const formatClock = (seconds) => {
     const safe = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -638,6 +664,8 @@ export default function HomePage() {
     if (!videoId) {
       setPreviewVideoId("");
       setInputSongTitle("");
+      setInputSongArtist("");
+      setInputSongDuration("");
       setInputKarUrl("");
       setInputVocUrl("");
       setLoadingInputLinks(false);
@@ -647,6 +675,10 @@ export default function HomePage() {
     let cancelled = false;
 
     const readTitle = async () => {
+      let titleValue = `YouTube ${videoId}`;
+      let artistValue = "";
+      let durationValue = "";
+
       try {
         const response = await fetch(
           `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
@@ -655,18 +687,48 @@ export default function HomePage() {
 
         if (!response.ok) {
           if (!cancelled) {
-            setInputSongTitle(`YouTube ${videoId}`);
+            setInputSongTitle(titleValue);
+            setInputSongArtist(artistValue);
+            setInputSongDuration(durationValue);
           }
           return;
         }
 
         const data = await response.json();
+        titleValue = data?.title || titleValue;
+        artistValue = data?.author_name || "";
+
+        try {
+          const listResponse = await fetch("/api/youtube/get-song-list", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: titleValue, artist: "", genre: "" }),
+            cache: "no-store",
+          });
+
+          if (listResponse.ok) {
+            const listData = await listResponse.json();
+            const songs = Array.isArray(listData?.songs) ? listData.songs : [];
+            const matched = songs.find((song) => extractVideoId(song?.youtubeUrl || "") === videoId);
+            if (matched) {
+              artistValue = matched.artist || artistValue;
+              durationValue = matched.duration || "";
+            }
+          }
+        } catch {
+          // Keep oEmbed fallback values.
+        }
+
         if (!cancelled) {
-          setInputSongTitle(data?.title || `YouTube ${videoId}`);
+          setInputSongTitle(titleValue);
+          setInputSongArtist(artistValue);
+          setInputSongDuration(durationValue);
         }
       } catch {
         if (!cancelled) {
-          setInputSongTitle(`YouTube ${videoId}`);
+          setInputSongTitle(titleValue);
+          setInputSongArtist(artistValue);
+          setInputSongDuration(durationValue);
         }
       }
     };
@@ -861,6 +923,13 @@ export default function HomePage() {
     sendPreviewCommand("seekTo", [next, true]);
   };
 
+  const selectSyncChannel = (source) => {
+    if (source !== "kar" && source !== "voc") return;
+    setActiveSource(source);
+    mutePreviewIframe();
+    playSynced(source, readCurrentTime());
+  };
+
   const togglePlayPause = () => {
     if (activeSource === "mix") {
       if (isPlaying) {
@@ -985,20 +1054,14 @@ export default function HomePage() {
           <button
             type="button"
             className={`lang-btn ${lang === "he" ? "is-active" : ""}`}
-            onClick={() => {
-              setLang("he");
-              localStorage.setItem("youkar-lang", "he");
-            }}
+            onClick={() => switchLanguage("he")}
           >
             HE
           </button>
           <button
             type="button"
             className={`lang-btn ${lang === "en" ? "is-active" : ""}`}
-            onClick={() => {
-              setLang("en");
-              localStorage.setItem("youkar-lang", "en");
-            }}
+            onClick={() => switchLanguage("en")}
           >
             EN
           </button>
@@ -1030,6 +1093,24 @@ export default function HomePage() {
               }}
               required
             />
+
+            {youtubeUrl ? (
+              <button
+                type="button"
+                className="clear-youtube-btn"
+                aria-label="Clear YouTube input"
+                title="Clear"
+                onClick={() => {
+                  setYoutubeUrl("");
+                  setShowSongDropdown(false);
+                  setSongSearchResults([]);
+                  setQueuedVideoId("");
+                  setStatus({ type: "idle", message: "" });
+                }}
+              >
+                ×
+              </button>
+            ) : null}
 
             {showSongDropdown ? (
               <div className="search-dropdown" role="listbox" aria-label="Song search suggestions">
@@ -1069,6 +1150,16 @@ export default function HomePage() {
               </div>
             ) : null}
           </div>
+
+          {videoId && inputSongTitle ? (
+            <p className="yt-input-meta" dir={lang === "he" ? "rtl" : "ltr"}>
+              <span>{inputSongTitle}</span>
+              <span> / </span>
+              <span>{inputSongArtist || "Unknown artist"}</span>
+              <span> / </span>
+              <span>{inputSongDuration || "N/A"}</span>
+            </p>
+          ) : null}
 
           {isSearchingSongs ? (
             <p className="field-hint">{ui.searchLoading}</p>
@@ -1171,6 +1262,26 @@ export default function HomePage() {
             />
 
             <div className="sync-controls" dir="ltr">
+              <div className="sync-source-icons" role="group" aria-label="Audio channels">
+                <button
+                  type="button"
+                  className={`source-icon-btn karaoke-icon ${activeSource === "kar" ? "is-active" : ""}`}
+                  onClick={() => selectSyncChannel("kar")}
+                  aria-label={ui.colKar}
+                  title={ui.colKar}
+                >
+                  🎵
+                </button>
+                <button
+                  type="button"
+                  className={`source-icon-btn vocals-icon ${activeSource === "voc" ? "is-active" : ""}`}
+                  onClick={() => selectSyncChannel("voc")}
+                  aria-label={ui.colVoc}
+                  title={ui.colVoc}
+                >
+                  🎤
+                </button>
+              </div>
               <button
                 type="button"
                 className="sync-play-btn"

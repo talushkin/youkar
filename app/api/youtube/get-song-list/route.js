@@ -1,5 +1,37 @@
 import { NextResponse } from "next/server";
 
+function parseDurationToSeconds(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  // mm:ss or hh:mm:ss
+  if (raw.includes(":")) {
+    const parts = raw.split(":").map((part) => Number(part));
+    if (parts.some((part) => !Number.isFinite(part))) return null;
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+
+  // ISO-8601 style durations like PT7M32S
+  const iso = raw.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
+  if (iso) {
+    const hours = Number(iso[1] || 0);
+    const minutes = Number(iso[2] || 0);
+    const seconds = Number(iso[3] || 0);
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  // plain numeric string, interpreted as seconds
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return numeric;
+
+  return null;
+}
+
 function normalizeSongs(payload) {
   const candidates =
     payload?.songs ||
@@ -28,6 +60,7 @@ function normalizeSongs(payload) {
         (videoId ? `https://www.youtube.com/watch?v=${videoId}` : "");
       const title = item?.title || item?.name || item?.songTitle || "";
       const artist = item?.artist || item?.channelTitle || item?.singer || "";
+      const duration = item?.duration || item?.length || item?.videoDuration || "";
 
       if (!youtubeUrl || !title) {
         return null;
@@ -37,6 +70,7 @@ function normalizeSongs(payload) {
         id: String(videoId || youtubeUrl || index),
         title: String(title),
         artist: String(artist || ""),
+        duration: String(duration || ""),
         youtubeUrl: String(youtubeUrl),
       };
     })
@@ -44,6 +78,11 @@ function normalizeSongs(payload) {
 
   const seen = new Set();
   return mapped.filter((song) => {
+    const durationSeconds = parseDurationToSeconds(song.duration);
+    if (durationSeconds !== null && durationSeconds > 7 * 60) {
+      return false;
+    }
+
     if (seen.has(song.youtubeUrl)) {
       return false;
     }
