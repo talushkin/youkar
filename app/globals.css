@@ -111,14 +111,22 @@ body {
   background: rgba(56, 200, 109, 0.1);
 }
 
-.examples-table .mini-btn {
-  margin-top: 0;
-  cursor: pointer;
+
+.example-title-line {
+  font-size: 0.95rem;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   width: 100%;
-  line-height: 1.25;
-  text-align: center;
-  white-space: normal;
-  padding: 6px 8px;
+  text-align: left;
+  line-height: 1.35;
+  transition: color 0.15s;
+}
+.example-title-line:hover, .is-active-row .example-title-line {
+  color: var(--accent-2);
+  text-decoration: underline;
 }
 
 .examples-table tr.is-active-row td {

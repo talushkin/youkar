@@ -492,41 +492,38 @@ export default function HomePage() {
   };
 
   const handleExamplePlay = (songIndex, source) => {
-    // Swap kar↔voc on same song without restarting playback.
-    if (
-      songIndex === activeExampleIndex &&
-      (source === "kar" || source === "voc") &&
-      (activeSource === "kar" || activeSource === "voc")
-    ) {
-      soloSourceRef.current = source;
-      setSoloSource(source);
-      setActiveSource(source);
-      applySoloMode();
+    // Toggle play/pause for any mix/kar/voc button if already selected
+    const isSameSelection = songIndex === activeExampleIndex && source === activeSource;
+    if (isSameSelection) {
+      togglePlayPause();
       return;
     }
 
-    if (source === "kar" || source === "voc") {
-      const nextVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
-      autoplayPreview(nextVideoId, 0, true);
+    // For kar/voc, if switching to the same song but different source, do not restart from 0:00
+    if ((source === "kar" || source === "voc") && songIndex === activeExampleIndex) {
+      setActiveSource(source);
+      soloSourceRef.current = source;
+      setSoloSource(source);
+      applySoloMode();
+      // Do not reset time, just play/pause as needed
+      if (!isPlaying) {
+        playSynced(source);
+        setIsPlaying(true);
+      } else {
+        pauseSynced();
+        setIsPlaying(false);
+      }
+      return;
     }
 
+    // For mix, always mute YT and set up both audio
     if (source === "mix") {
-      const isSameMixSelection =
-        songIndex === activeExampleIndex && activeSource === "mix";
-
-      if (isSameMixSelection) {
-        togglePlayPause();
-        return;
-      }
-
-      // Always mute the YouTube preview when playing example mix
       setPreviewMuted(true);
       mutePreviewIframe();
       pauseCurrent();
       setActiveExampleIndex(songIndex);
-      setActiveSource("mix"); // Mark speaker icon as active
-      setSoloSource(null);    // Ensure mix is visually selected
-      // Set up both audio elements for sync and play
+      setActiveSource("mix");
+      setSoloSource(null);
       const song = EXAMPLE_SONGS[songIndex];
       if (karAudioRef.current && vocAudioRef.current && song.karaoke && song.vocals) {
         karAudioRef.current.src = song.karaoke;
@@ -538,35 +535,47 @@ export default function HomePage() {
         setTimeout(() => playSynced("kar", 0), 0);
       }
       const mixVideoId = extractVideoId(song.youtube);
-
-      // If the same video is already loaded in the YouTube player, avoid
-      // reloading it to prevent restarting from 0:00. Just ensure playback.
       const currentYtId = ytPlayerRef.current?.getVideoData?.()?.video_id;
       if (currentYtId && mixVideoId && currentYtId === mixVideoId) {
         ensureMixPlayback();
         setIsPlaying(true);
         return;
       }
-
       autoplayPreview(mixVideoId);
       return;
     }
 
-    const isSameSelection =
-      songIndex === activeExampleIndex && source === activeSource;
-
-    if (isSameSelection) {
-      if (source === "mix" && !ytReady) {
-        pendingActionRef.current = { songIndex, source };
-        return;
-      }
-      togglePlayPause();
+    // For kar/voc, set up solo mode and play/pause toggle
+    if (source === "kar" || source === "voc") {
+      setActiveExampleIndex(songIndex);
+      setActiveSource(source);
+      soloSourceRef.current = source;
+      setSoloSource(source);
+      applySoloMode();
+      const nextVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
+      autoplayPreview(nextVideoId, 0, true);
+      // Play synced audio for kar/voc
+      setTimeout(() => playSynced(source, 0), 0);
       return;
     }
 
+    // Fallback: apply action
     pendingActionRef.current = { songIndex, source };
     applyAction();
   };
+  function handleExampleTitleClick(idx) {
+    setPreviewMuted(true);
+    // If already playing and this title is active, stop everything (YT, kar, voc, slider)
+    if (isPlaying && activeExampleIndex === idx && activeSource === "mix") {
+      pauseCurrent();
+      setIsPlaying(false);
+      return;
+    }
+    // Otherwise, start playback as before
+    pauseCurrent();
+    setIsPlaying(false);
+    handleExamplePlay(idx, "mix");
+  }
 
   useEffect(() => {
     if (!window.YT || !window.YT.Player || ytPlayerRef.current || !ytHostRef.current) {
@@ -989,21 +998,9 @@ export default function HomePage() {
     setYoutubeUrl(nextUrl);
     setYoutubeDisplayValue(nextDisplay || nextUrl);
     if (nextVideoId) {
-      // If both kar and voc are available, mute YT, set kar/voc volume to 1, and select mix
-      const hasKar = !!song.karaoke;
-      const hasVoc = !!song.vocals;
-      if (hasKar && hasVoc) {
-        setPreviewMuted(true);
-        setActiveSource("mix");
-        setTimeout(() => {
-          try {
-            karAudioRef.current && (karAudioRef.current.volume = 1);
-            vocAudioRef.current && (vocAudioRef.current.volume = 1);
-          } catch (e) {}
-        }, 0);
-      } else {
-        setPreviewMuted(false);
-      }
+      // For search, only play YT preview, do not enable/play kar/voc
+      setPreviewMuted(false);
+      setActiveSource("mix");
       pauseCurrent();
     }
     setShowSongDropdown(false);
@@ -1542,14 +1539,14 @@ export default function HomePage() {
                       className={idx === activeExampleIndex ? "is-active-row" : ""}
                     >
                     <td>
-                      <button
-                        type="button"
-                        className="mini-btn yt-btn"
+                      <span
+                        className="example-title-line"
                         onClick={() => handleExampleTitleClick(idx)}
                         title="Play YouTube (muted)"
+                        style={{ cursor: "pointer", display: "inline-block", padding: "4px 0" }}
                       >
                         {song.title}
-                      </button>
+                      </span>
                     </td>
 
                     <td>
