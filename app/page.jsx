@@ -1062,14 +1062,13 @@ export default function HomePage() {
     applySoloMode();
   };
 
-  const selectMixChannel = () => {
+  const selectMixChannel = (idx = activeExampleIndex) => {
     soloSourceRef.current = null;
     setSoloSource(null);
     setActiveSource("mix");
-    // Always load the selected example's YT video into the iframe, even if already on mix
-    if (activeExampleIndex !== null && typeof activeExampleIndex === "number") {
-      setActiveExampleIndex(activeExampleIndex);
-      const song = EXAMPLE_SONGS[activeExampleIndex];
+    if (idx !== null && typeof idx === "number") {
+      setActiveExampleIndex(idx);
+      const song = EXAMPLE_SONGS[idx];
       if (song) {
         const nextVideoId = extractVideoId(song.youtube);
         setPreviewVideoId(nextVideoId);
@@ -1564,7 +1563,7 @@ export default function HomePage() {
                       <button
                         type="button"
                         className={`mini-btn yt-btn ${idx === activeExampleIndex && activeSource === "mix" ? "is-active" : ""}`}
-                        onClick={selectMixChannel}
+                        onClick={() => selectMixChannel(idx)}
                         aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
                         title="Play YouTube mix (original track)"
                       >
