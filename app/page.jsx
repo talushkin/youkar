@@ -266,10 +266,14 @@ export default function HomePage() {
     if (!nextVideoId) return;
     const safeStart = Math.max(0, Math.floor(Number(startSeconds) || 0));
     previewTimeRef.current = safeStart;
-    setPreviewMuted(Boolean(muted));
+    setPreviewMuted(true); // Always mute YT
     setPreviewVideoId(nextVideoId);
     setPreviewNonce((value) => value + 1);
     setIsPlaying(true);
+    // Force mute and volume 0 for YT iframe
+    setTimeout(() => {
+      mutePreviewIframe();
+    }, 200);
   };
 
   const sendPreviewCommand = (func, args = []) => {
@@ -308,18 +312,24 @@ export default function HomePage() {
 
     if (soloSourceRef.current === "kar") {
       karAudioRef.current.muted = false;
-      vocAudioRef.current.muted = true;
+      karAudioRef.current.volume = 1;
+      vocAudioRef.current.muted = false;
+      vocAudioRef.current.volume = 0;
       return;
     }
 
     if (soloSourceRef.current === "voc") {
-      karAudioRef.current.muted = true;
+      karAudioRef.current.muted = false;
+      karAudioRef.current.volume = 0;
       vocAudioRef.current.muted = false;
+      vocAudioRef.current.volume = 1;
       return;
     }
 
     karAudioRef.current.muted = false;
+    karAudioRef.current.volume = 1;
     vocAudioRef.current.muted = false;
+    vocAudioRef.current.volume = 1;
   };
 
   const playSynced = (source, startAt = null) => {
@@ -334,6 +344,9 @@ export default function HomePage() {
     if (secondary) secondary.muted = false;
 
     applySoloMode();
+
+    // Always mute YT and set volume 0
+    mutePreviewIframe();
 
     const plays = [primary.play()];
     if (secondary && secondary.src) plays.push(secondary.play());
@@ -492,27 +505,17 @@ export default function HomePage() {
   };
 
   const handleExamplePlay = (songIndex, source) => {
-    // Toggle play/pause for any mix/kar/voc button if already selected
-    const isSameSelection = songIndex === activeExampleIndex && source === activeSource;
-    if (isSameSelection) {
-      togglePlayPause();
-      return;
-    }
+    // Remove toggle: always restart playback from 0:00 for same selection
+    // (no early return)
 
-    // For kar/voc, if switching to the same song but different source, do not restart from 0:00
+    // For kar/voc, if switching to the same song but different source, resume from current time
     if ((source === "kar" || source === "voc") && songIndex === activeExampleIndex) {
       setActiveSource(source);
       soloSourceRef.current = source;
       setSoloSource(source);
       applySoloMode();
-      // Do not reset time, just play/pause as needed
-      if (!isPlaying) {
-        playSynced(source);
-        setIsPlaying(true);
-      } else {
-        pauseSynced();
-        setIsPlaying(false);
-      }
+      playSynced(source); // no startAt param, resumes from current time
+      setIsPlaying(true);
       return;
     }
 
@@ -520,7 +523,7 @@ export default function HomePage() {
     if (source === "mix") {
       setPreviewMuted(true);
       mutePreviewIframe();
-      pauseCurrent();
+      const isSameMix = songIndex === activeExampleIndex && activeSource === "mix";
       setActiveExampleIndex(songIndex);
       setActiveSource("mix");
       setSoloSource(null);
@@ -532,16 +535,30 @@ export default function HomePage() {
         vocAudioRef.current.muted = false;
         karAudioRef.current.volume = 1;
         vocAudioRef.current.volume = 1;
-        setTimeout(() => playSynced("kar", 0), 0);
+        // Play both kar and voc together on mix
+        if (!isSameMix) {
+          setTimeout(() => {
+            playSynced("kar", 0);
+            playSynced("voc", 0);
+          }, 0);
+        } else {
+          setTimeout(() => {
+            playSynced("kar");
+            playSynced("voc");
+          }, 0);
+        }
       }
       const mixVideoId = extractVideoId(song.youtube);
       const currentYtId = ytPlayerRef.current?.getVideoData?.()?.video_id;
-      if (currentYtId && mixVideoId && currentYtId === mixVideoId) {
+      if (isSameMix && currentYtId && mixVideoId && currentYtId === mixVideoId) {
+        // Resume YT from current time, do not reload
         ensureMixPlayback();
         setIsPlaying(true);
         return;
       }
-      autoplayPreview(mixVideoId);
+      if (!isSameMix) {
+        autoplayPreview(mixVideoId);
+      }
       return;
     }
 
@@ -555,7 +572,7 @@ export default function HomePage() {
       const nextVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
       autoplayPreview(nextVideoId, 0, true);
       // Play synced audio for kar/voc
-      setTimeout(() => playSynced(source, 0), 0);
+      setTimeout(() => playSynced(source), 0); // no startAt param
       return;
     }
 
@@ -565,13 +582,7 @@ export default function HomePage() {
   };
   function handleExampleTitleClick(idx) {
     setPreviewMuted(true);
-    // If already playing and this title is active, stop everything (YT, kar, voc, slider)
-    if (isPlaying && activeExampleIndex === idx && activeSource === "mix") {
-      pauseCurrent();
-      setIsPlaying(false);
-      return;
-    }
-    // Otherwise, start playback as before
+    // Remove toggle: always restart playback from 0:00 for same title
     pauseCurrent();
     setIsPlaying(false);
     handleExamplePlay(idx, "mix");
@@ -1055,28 +1066,34 @@ export default function HomePage() {
     soloSourceRef.current = null;
     setSoloSource(null);
     setActiveSource("mix");
-    // If an example is active, ensure the example table highlights mix
+    // Always load the selected example's YT video into the iframe, even if already on mix
     if (activeExampleIndex !== null && typeof activeExampleIndex === "number") {
       setActiveExampleIndex(activeExampleIndex);
+      const song = EXAMPLE_SONGS[activeExampleIndex];
+      if (song) {
+        const nextVideoId = extractVideoId(song.youtube);
+        setPreviewVideoId(nextVideoId);
+        setPreviewNonce((n) => n + 1);
+      }
     }
     applySoloMode();
   };
 
   const togglePlayPause = () => {
-    if (activeSource === "mix") {
-      if (isPlaying) {
-        sendPreviewCommand("pauseVideo");
-        setIsPlaying(false);
-      } else {
-        unmutePreviewIframe();
-        sendPreviewCommand("playVideo");
-        setIsPlaying(true);
-      }
+    // Always stop all sources (YT, kar, voc) when pausing
+    if (isPlaying) {
+      sendPreviewCommand("pauseVideo");
+      karAudioRef.current?.pause();
+      vocAudioRef.current?.pause();
+      setIsPlaying(false);
       return;
     }
 
-    if (isPlaying) {
-      pauseSynced();
+    // Resume only the current source
+    if (activeSource === "mix") {
+      unmutePreviewIframe();
+      sendPreviewCommand("playVideo");
+      setIsPlaying(true);
       return;
     }
     playSynced(activeSource);
@@ -1513,12 +1530,8 @@ export default function HomePage() {
                     <td>
                       <button
                         type="button"
-                        className={`mini-btn yt-btn ${
-                          activeExampleIndex === INPUT_ROW_INDEX && activeSource === "mix"
-                            ? "is-active"
-                            : ""
-                        }`}
-                        onClick={() => handleInputRowPlay("mix")}
+                        className={`mini-btn yt-btn ${activeExampleIndex === INPUT_ROW_INDEX && activeSource === "mix" ? "is-active" : ""}`}
+                        onClick={selectMixChannel}
                         aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "mix"}
                         title="Play input YouTube mix"
                       >
@@ -1541,9 +1554,7 @@ export default function HomePage() {
                     <td>
                       <span
                         className="example-title-line"
-                        onClick={() => handleExampleTitleClick(idx)}
-                        title="Play YouTube (muted)"
-                        style={{ cursor: "pointer", display: "inline-block", padding: "4px 0" }}
+                        style={{ display: "inline-block", padding: "4px 0", cursor: "default" }}
                       >
                         {song.title}
                       </span>
@@ -1552,13 +1563,9 @@ export default function HomePage() {
                     <td>
                       <button
                         type="button"
-                          className={`mini-btn yt-btn ${
-                            idx === activeExampleIndex && activeSource === "mix"
-                              ? "is-active"
-                              : ""
-                          }`}
-                        onClick={() => handleExamplePlay(idx, "mix")}
-                          aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
+                        className={`mini-btn yt-btn ${idx === activeExampleIndex && activeSource === "mix" ? "is-active" : ""}`}
+                        onClick={selectMixChannel}
+                        aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
                         title="Play YouTube mix (original track)"
                       >
                         {ui.colMix}

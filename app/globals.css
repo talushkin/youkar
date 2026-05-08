@@ -112,22 +112,7 @@ body {
 }
 
 
-.example-title-line {
-  font-size: 0.95rem;
-  color: var(--text);
-  background: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  width: 100%;
-  text-align: left;
-  line-height: 1.35;
-  transition: color 0.15s;
-}
-.example-title-line:hover, .is-active-row .example-title-line {
-  color: var(--accent-2);
-  text-decoration: underline;
-}
+
 
 .examples-table tr.is-active-row td {
   background: rgba(255, 255, 255, 0.04);
