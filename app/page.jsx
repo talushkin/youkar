@@ -70,6 +70,17 @@ function extractVideoId(link) {
 }
 
 export default function HomePage() {
+  // Ionicons CDN for icons
+  if (typeof window !== "undefined") {
+    const id = "ionicons-cdn";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css";
+      document.head.appendChild(link);
+    }
+  }
   const INPUT_ROW_INDEX = -1;
   const [lang, setLang] = useState(() => {
     if (typeof window !== "undefined") {
@@ -508,11 +519,35 @@ export default function HomePage() {
         return;
       }
 
-      unmutePreviewIframe();
+      // Always mute the YouTube preview when playing example mix
+      setPreviewMuted(true);
+      mutePreviewIframe();
       pauseCurrent();
       setActiveExampleIndex(songIndex);
-      setActiveSource("mix");
-      const mixVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
+      setActiveSource("mix"); // Mark speaker icon as active
+      setSoloSource(null);    // Ensure mix is visually selected
+      // Set up both audio elements for sync and play
+      const song = EXAMPLE_SONGS[songIndex];
+      if (karAudioRef.current && vocAudioRef.current && song.karaoke && song.vocals) {
+        karAudioRef.current.src = song.karaoke;
+        vocAudioRef.current.src = song.vocals;
+        karAudioRef.current.muted = false;
+        vocAudioRef.current.muted = false;
+        karAudioRef.current.volume = 1;
+        vocAudioRef.current.volume = 1;
+        setTimeout(() => playSynced("kar", 0), 0);
+      }
+      const mixVideoId = extractVideoId(song.youtube);
+
+      // If the same video is already loaded in the YouTube player, avoid
+      // reloading it to prevent restarting from 0:00. Just ensure playback.
+      const currentYtId = ytPlayerRef.current?.getVideoData?.()?.video_id;
+      if (currentYtId && mixVideoId && currentYtId === mixVideoId) {
+        ensureMixPlayback();
+        setIsPlaying(true);
+        return;
+      }
+
       autoplayPreview(mixVideoId);
       return;
     }
@@ -954,6 +989,21 @@ export default function HomePage() {
     setYoutubeUrl(nextUrl);
     setYoutubeDisplayValue(nextDisplay || nextUrl);
     if (nextVideoId) {
+      // If both kar and voc are available, mute YT, set kar/voc volume to 1, and select mix
+      const hasKar = !!song.karaoke;
+      const hasVoc = !!song.vocals;
+      if (hasKar && hasVoc) {
+        setPreviewMuted(true);
+        setActiveSource("mix");
+        setTimeout(() => {
+          try {
+            karAudioRef.current && (karAudioRef.current.volume = 1);
+            vocAudioRef.current && (vocAudioRef.current.volume = 1);
+          } catch (e) {}
+        }, 0);
+      } else {
+        setPreviewMuted(false);
+      }
       pauseCurrent();
     }
     setShowSongDropdown(false);
@@ -1007,6 +1057,11 @@ export default function HomePage() {
   const selectMixChannel = () => {
     soloSourceRef.current = null;
     setSoloSource(null);
+    setActiveSource("mix");
+    // If an example is active, ensure the example table highlights mix
+    if (activeExampleIndex !== null && typeof activeExampleIndex === "number") {
+      setActiveExampleIndex(activeExampleIndex);
+    }
     applySoloMode();
   };
 
@@ -1337,12 +1392,30 @@ export default function HomePage() {
               <div className="sync-source-icons" role="group" aria-label="Audio channels">
                 <button
                   type="button"
-                  className={`source-icon-btn mix-icon ${soloSource === null ? "is-active" : ""}`}
+                  className={`source-icon-btn mix-icon${soloSource === null ? " is-active mix-icon" : " mix-icon"}`}
                   onClick={selectMixChannel}
                   aria-label={ui.colMix}
                   title={ui.colMix}
                 >
-                  🔊
+                  <i className="icon ion-ios-volume-high" aria-hidden="true"></i>
+                </button>
+                <button
+                  type="button"
+                  className={`source-icon-btn karaoke-icon${soloSource === "kar" ? " is-active karaoke-icon" : " karaoke-icon"}`}
+                  onClick={() => selectSyncChannel("kar")}
+                  aria-label={ui.colKar}
+                  title={ui.colKar}
+                >
+                  <i className="icon ion-ios-mic" aria-hidden="true"></i>
+                </button>
+                <button
+                  type="button"
+                  className={`source-icon-btn vocals-icon${soloSource === "voc" ? " is-active vocals-icon" : " vocals-icon"}`}
+                  onClick={() => selectSyncChannel("voc")}
+                  aria-label={ui.colVoc}
+                  title={ui.colVoc}
+                >
+                  <i className="icon ion-ios-headset" aria-hidden="true"></i>
                 </button>
               </div>
               <button
@@ -1472,12 +1545,13 @@ export default function HomePage() {
                       <button
                         type="button"
                         className="mini-btn yt-btn"
-                        onClick={() => handleExamplePlay(idx, "mix")}
-                        title="Play YouTube mix (original track)"
+                        onClick={() => handleExampleTitleClick(idx)}
+                        title="Play YouTube (muted)"
                       >
                         {song.title}
                       </button>
                     </td>
+
                     <td>
                       <button
                         type="button"
