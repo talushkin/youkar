@@ -95,6 +95,40 @@ export default function HomePage() {
     }
     return DEFAULT_YT_QUERY.he;
   });
+
+  // New: fetch video data by videoId if user enters a bare videoId or youtu.be short link
+  useEffect(() => {
+    const val = youtubeUrl.trim();
+    // If input is a bare videoId (11 chars, alphanumeric, no spaces)
+    const isVideoId = /^[a-zA-Z0-9_-]{11}$/.test(val);
+    // Or a youtu.be short link
+    const isShortLink = /^https?:\/\/youtu\.be\/[a-zA-Z0-9_-]{11}/.test(val);
+    let videoId = null;
+    if (isVideoId) videoId = val;
+    if (isShortLink) videoId = val.split('/').pop();
+    if (!videoId) return;
+
+    // Immediately load the video into the preview iframe
+    setPreviewVideoId(videoId);
+    setPreviewNonce((n) => n + 1);
+    setActiveSource("mix");
+
+    // Fetch video data from backend
+    fetch("/api/youtube/get-video-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId }),
+    })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!data) return;
+        setInputSongTitle(data.title || "");
+        setInputSongArtist(data.artist || "");
+        setInputSongDuration(data.duration || "");
+        setYoutubeDisplayValue(`${data.title || ""} / ${data.artist || ""} / ${data.duration || ""}`.replace(/\s+\/\s+$/, ""));
+      })
+      .catch(() => {});
+  }, [youtubeUrl]);
   const [songSearchResults, setSongSearchResults] = useState([]);
   const [youtubeDisplayValue, setYoutubeDisplayValue] = useState("");
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
@@ -1098,7 +1132,73 @@ export default function HomePage() {
     playSynced(activeSource);
   };
 
-  const createKaraoke = async () => {
+  // Bypass payment: after sending WA and adding to pending, go to after-payment
+  const bypassPayment = async () => {
+    if (!videoId || !hasValidPhone) {
+      setStatus({
+        type: "error",
+        message: "Please enter a valid phone number and YouTube link.",
+      });
+      return;
+    }
+    setIsCreating(true);
+    setStatus({ type: "idle", message: "" });
+    try {
+      const waResponse = await fetch("/api/submit-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneAreaCode,
+          localNumber: phoneNumber,
+          phoneNumber: normalizedPhone,
+          youtubeUrl,
+          videoId,
+          lang,
+        }),
+      });
+      const waData = await waResponse.json();
+      if (!waResponse.ok) {
+        throw new Error(waData?.error || "Could not send WhatsApp request");
+      }
+      const response = await fetch("/api/pending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            videoId,
+            title: inputSongTitle || `YouTube ${videoId}`,
+            duration: activeExample?.duration || "N/A",
+            meta: {
+              fromPhone: `972${normalizedPhone.slice(1)}`,
+              userLang: lang === "he" ? "HE" : "EN",
+            },
+          },
+        ]),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create karaoke request");
+      }
+      setIsInPendingQueue(true);
+      setQueuedVideoId(data.videoId || videoId);
+      setSongTitle(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`);
+      setStatus({
+        type: "success",
+        message: "Karaoke request created and WhatsApp sent. Bypassing payment...",
+      });
+      // Redirect to after-payment
+      window.location.assign(
+        `${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`)}`
+      );
+    } catch (err) {
+      setStatus({
+        type: "error",
+        message: err.message || "Could not create karaoke request",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
     if (!videoId || !hasValidPhone) {
       setStatus({
         type: "error",
@@ -1372,14 +1472,26 @@ export default function HomePage() {
                 </button>
               </div>
             ) : (
-              <button
-                ref={createButtonRef}
-                type="submit"
-                disabled={!canCreate || isCreating}
-                className={canCreate ? "primary-cta create-cta-button is-highlight" : "primary-cta create-cta-button"}
-              >
-                {isCreating ? ui.creating : ui.create}
-              </button>
+              <>
+                <button
+                  ref={createButtonRef}
+                  type="submit"
+                  disabled={!canCreate || isCreating}
+                  className={canCreate ? "primary-cta create-cta-button is-highlight" : "primary-cta create-cta-button"}
+                >
+                  {isCreating ? ui.creating : ui.create}
+                </button>
+                {/* Bypass payment button */}
+                <button
+                  type="button"
+                  disabled={!canCreate || isCreating}
+                  className="primary-cta create-cta-button bypass-payment-btn"
+                  style={{ marginLeft: 8, background: '#4caf50', color: '#fff' }}
+                  onClick={bypassPayment}
+                >
+                  Bypass Payment
+                </button>
+              </>
             )}
           </div>
         </form>
