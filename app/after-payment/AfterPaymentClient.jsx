@@ -369,6 +369,40 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           </div>
         )}
 
+        {/* Lyrics Links */}
+        <div className="lyrics-links" style={{ display: 'flex', gap: '3rem', justifyContent: 'center', margin: '1.5rem 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, marginBottom: 4 }}>
+              CHORDS / אקורדים לשיר{title ? ` ${encodeURIComponent(title)}` : ''}
+            </span>
+            <a
+              href={`https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title || "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Tab4U Chords for ${title || ''}`}
+              style={{ display: 'inline-flex', alignItems: 'center' }}
+            >
+              <img src="/tab4uPclogo.svg" alt="Tab4U" style={{ width: 50, height: 30, objectFit: 'contain', marginRight: 8 }} />
+              Tab4U
+            </a>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, marginBottom: 4 }}>
+              LYRICS / מילים לשיר{title ? ` ${encodeURIComponent(title)}` : ''}
+            </span>
+            <a
+              href={`https://shironet.mako.co.il/search?q=${encodeURIComponent(title || "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Shironet Lyrics for ${title || ''}`}
+              style={{ display: 'inline-flex', alignItems: 'center' }}
+            >
+              <img src="/shironet.gif" alt="Shironet" style={{ width: 50, height: 30, objectFit: 'contain', marginRight: 8 }} />
+              Shironet
+            </a>
+          </div>
+        </div>
+
         <p className={`result ${status.type === "pending" ? "info" : status.type}`}>
           {status.message}
         </p>
