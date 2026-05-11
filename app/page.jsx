@@ -1,14 +1,10 @@
 "use client";
 
-// Utility: Remove artist name from 'Artist - Title' for Shironet/Tab4U
-
 import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
-const returnUrlBase = isLocalhost
-  ? (process.env.FRONTEND_URL_DEV ? process.env.FRONTEND_URL_DEV + "/after-payment" : "http://localhost:3000/after-payment")
-  : process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
+const returnUrlBase =
+  process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
 
 const DEFAULT_YT_QUERY = {
   he: "שלמה ארצי",
@@ -78,32 +74,7 @@ function extractVideoId(link) {
   }
 }
 
-
-
-
 export default function HomePage() {
-
-  function getSongTitleOnly(fullTitle) {
-// Utility: Remove artist name (anywhere in title, first/last/each word)
-function removeArtistFromTitle(title, artist) {
-  if (!title || !artist) return title;
-  // Remove 'Artist - ' prefix
-  let clean = title.replace(new RegExp(`^${escapeRegExp(artist)}\\s*-\\s*`, 'i'), '');
-  // Remove ' - Artist' suffix
-  clean = clean.replace(new RegExp(`\\s*-\\s*${escapeRegExp(artist)}$`, 'i'), '');
-  // Remove artist name anywhere (first/last/each word)
-  const artistWords = artist.split(/\s+/).filter(Boolean);
-  artistWords.forEach(word => {
-    clean = clean.replace(new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi'), '');
-  });
-  // Remove extra spaces and dashes
-  clean = clean.replace(/\\s*-\\s*/g, ' ').replace(/\\s{2,}/g, ' ').trim();
-  return clean;
-}
-
-function escapeRegExp(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
   // On mount, set preview to first example video (no autoplay)
   useEffect(() => {
     if (typeof window !== 'undefined' && EXAMPLE_SONGS.length > 0) {
@@ -161,34 +132,18 @@ function escapeRegExp(string) {
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (!data) return;
-        const sanitizedTitle = removeArtistFromTitle(data.title || "", data.artist || "");
-        setInputSongTitle(sanitizedTitle);
+        setInputSongTitle(data.title || "");
         setInputSongArtist(data.artist || "");
         setInputSongDuration(data.duration || "");
-        // Set display value to sanitized title + duration
+        // Set display value to title + duration, like on dropdown pick
         setYoutubeDisplayValue(
-          [sanitizedTitle, data.duration].filter(Boolean).join(" / ")
+          [data.title, data.duration].filter(Boolean).join(" / ")
         );
       })
       .catch(() => {});
   }, [youtubeUrl]);
 
   // ...existing code...
-
-  // Helper to build payment/after-payment URLs with sanitized title and artist
-  function buildPaymentUrl(base, videoId, phone, sanitizedTitle, artist, lang) {
-    const params = new URLSearchParams();
-    if (videoId) params.append("videoId", videoId);
-    if (phone) params.append("phone", phone);
-    if (sanitizedTitle) params.append("title", sanitizedTitle);
-    if (artist) params.append("artist", artist);
-    if (lang) params.append("lang", lang);
-    return `${base}?${params.toString()}`;
-  }
-
-  // Example usage:
-  // const paymentUrl = buildPaymentUrl("/payment", videoId, normalizedPhone, inputSongTitle, inputSongArtist, lang);
-  // const afterPaymentUrl = buildPaymentUrl("/after-payment", videoId, normalizedPhone, inputSongTitle, inputSongArtist, lang);
 
   // ...existing code...
 
@@ -1759,5 +1714,4 @@ function escapeRegExp(string) {
       </section>
     </main>
   );
-}
 }
