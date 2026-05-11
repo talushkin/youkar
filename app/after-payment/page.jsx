@@ -7,6 +7,7 @@ export default function AfterPaymentPage({ searchParams }) {
   const phone = typeof searchParams?.cellphonenotify === "string" ? searchParams.cellphonenotify
     : typeof searchParams?.phone === "string" ? searchParams.phone
     : "";
+  const lang = searchParams?.lang === "en" ? "en" : "he";
 
-  return <AfterPaymentClient videoId={videoId} errorDescription={errorDescription} phone={phone} title={title} />;
+  return <AfterPaymentClient videoId={videoId} errorDescription={errorDescription} phone={phone} title={title} lang={lang} />;
 }

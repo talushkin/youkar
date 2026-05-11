@@ -1,10 +1,14 @@
 "use client";
 
+// Utility: Remove artist name from 'Artist - Title' for Shironet/Tab4U
+
 import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const returnUrlBase =
-  process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
+const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
+const returnUrlBase = isLocalhost
+  ? (process.env.FRONTEND_URL_DEV ? process.env.FRONTEND_URL_DEV + "/after-payment" : "http://localhost:3000/after-payment")
+  : process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
 
 const DEFAULT_YT_QUERY = {
   he: "שלמה ארצי",
@@ -58,18 +62,48 @@ function extractVideoId(link) {
   try {
     const url = new URL(link);
     if (url.hostname.includes("youtu.be")) {
-      return url.pathname.replace("/", "") || null;
+      // Handles https://youtu.be/VIDEOID and https://youtu.be/VIDEOID?si=...
+      const path = url.pathname.replace("/", "");
+      // youtu.be always has the videoId as the first path segment
+      return path.split("/")[0] || null;
     }
     if (url.hostname.includes("youtube.com")) {
       return url.searchParams.get("v");
     }
     return null;
   } catch {
+    // Also handle raw videoId
+    if (/^[a-zA-Z0-9_-]{11}$/.test(link)) return link;
     return null;
   }
 }
 
+
+
+
 export default function HomePage() {
+
+  function getSongTitleOnly(fullTitle) {
+// Utility: Remove artist name (anywhere in title, first/last/each word)
+function removeArtistFromTitle(title, artist) {
+  if (!title || !artist) return title;
+  // Remove 'Artist - ' prefix
+  let clean = title.replace(new RegExp(`^${escapeRegExp(artist)}\\s*-\\s*`, 'i'), '');
+  // Remove ' - Artist' suffix
+  clean = clean.replace(new RegExp(`\\s*-\\s*${escapeRegExp(artist)}$`, 'i'), '');
+  // Remove artist name anywhere (first/last/each word)
+  const artistWords = artist.split(/\s+/).filter(Boolean);
+  artistWords.forEach(word => {
+    clean = clean.replace(new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi'), '');
+  });
+  // Remove extra spaces and dashes
+  clean = clean.replace(/\\s*-\\s*/g, ' ').replace(/\\s{2,}/g, ' ').trim();
+  return clean;
+}
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
   // On mount, set preview to first example video (no autoplay)
   useEffect(() => {
     if (typeof window !== 'undefined' && EXAMPLE_SONGS.length > 0) {
@@ -108,49 +142,53 @@ export default function HomePage() {
   // New: fetch video data by videoId if user enters a bare videoId or youtu.be short link
   useEffect(() => {
     const val = youtubeUrl.trim();
-    // If input is a bare videoId (11 chars, alphanumeric, no spaces)
-    const isVideoId = /^[a-zA-Z0-9_-]{11}$/.test(val);
-    // Or a youtu.be short link
-    const isShortLink = /^https?:\/\/youtu\.be\/[a-zA-Z0-9_-]{11}/.test(val);
-    // Or a full YouTube link
-    const isFullLink = /^https?:\/\/(www\.)?youtube\.com\/watch\?v=[a-zA-Z0-9_-]{11}/.test(val);
-    let videoId = null;
-    if (isVideoId) videoId = val;
-    if (isShortLink) videoId = val.split('/').pop();
-    if (isFullLink) {
-      try {
-        const url = new URL(val);
-        videoId = url.searchParams.get('v');
-      } catch {}
-    }
+    const videoId = extractVideoId(val);
     if (!videoId) return;
 
-    // Immediately load the video into the preview iframe
     setPreviewVideoId(videoId);
     setPreviewNonce((n) => n + 1);
     setActiveSource("mix");
 
-    // Fetch video data from backend
+    // Always fetch video data from backend and update input
     fetch("/api/youtube/get-video-data", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer 1234"
+      },
       body: JSON.stringify({ videoId }),
     })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (!data) return;
-        setInputSongTitle(data.title || "");
+        const sanitizedTitle = removeArtistFromTitle(data.title || "", data.artist || "");
+        setInputSongTitle(sanitizedTitle);
         setInputSongArtist(data.artist || "");
         setInputSongDuration(data.duration || "");
-        // Set display value to title + duration, like on dropdown pick
+        // Set display value to sanitized title + duration
         setYoutubeDisplayValue(
-          [data.title, data.duration].filter(Boolean).join(" / ")
+          [sanitizedTitle, data.duration].filter(Boolean).join(" / ")
         );
       })
       .catch(() => {});
   }, [youtubeUrl]);
 
   // ...existing code...
+
+  // Helper to build payment/after-payment URLs with sanitized title and artist
+  function buildPaymentUrl(base, videoId, phone, sanitizedTitle, artist, lang) {
+    const params = new URLSearchParams();
+    if (videoId) params.append("videoId", videoId);
+    if (phone) params.append("phone", phone);
+    if (sanitizedTitle) params.append("title", sanitizedTitle);
+    if (artist) params.append("artist", artist);
+    if (lang) params.append("lang", lang);
+    return `${base}?${params.toString()}`;
+  }
+
+  // Example usage:
+  // const paymentUrl = buildPaymentUrl("/payment", videoId, normalizedPhone, inputSongTitle, inputSongArtist, lang);
+  // const afterPaymentUrl = buildPaymentUrl("/after-payment", videoId, normalizedPhone, inputSongTitle, inputSongArtist, lang);
 
   // ...existing code...
 
@@ -1170,6 +1208,8 @@ export default function HomePage() {
     }
     setIsCreating(true);
     setStatus({ type: "idle", message: "" });
+    let waMessage = `✅ Your request was received.\n📞 Phone: 972${normalizedPhone.slice(1)}\n🎵 Title: ${inputSongTitle || `YouTube ${videoId}`}\n⏱️ Duration: ${activeExample?.duration || "Unknown"}\n🔗 YouTube: ${youtubeUrl}\n🎤 We will update you here once karaoke is ready.`;
+    let waFailed = false;
     try {
       const waResponse = await fetch("/api/submit-request", {
         method: "POST",
@@ -1185,8 +1225,19 @@ export default function HomePage() {
       });
       const waData = await waResponse.json();
       if (!waResponse.ok) {
-        throw new Error(waData?.error || "Could not send WhatsApp request");
+        waFailed = true;
+        if (waData?.backend?.error) {
+          waMessage = waData.backend.error;
+        } else {
+          waMessage = waData?.error || "Could not send WhatsApp request";
+        }
+        // Continue to pending even if WA fails
       }
+    } catch (err) {
+      waFailed = true;
+      waMessage = err.message || "Could not send WhatsApp request";
+    }
+    try {
       const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1211,8 +1262,11 @@ export default function HomePage() {
       setSongTitle(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`);
       setStatus({
         type: "success",
-        message: "Karaoke request created and WhatsApp sent. Bypassing payment...",
+        message: waFailed ? "Karaoke request created. WhatsApp notification failed." : "Karaoke request created and WhatsApp sent. Bypassing payment...",
       });
+      if (waFailed) {
+        alert(waMessage);
+      }
       // Redirect to after-payment
       window.location.assign(
         `${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`)}`
@@ -1232,6 +1286,7 @@ export default function HomePage() {
     const handler = (e) => {
       if (e.ctrlKey && e.altKey && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
+        alert('bypassing payment');
         if (typeof bypassPayment === 'function') bypassPayment();
       }
     };
@@ -1241,7 +1296,7 @@ export default function HomePage() {
 
   const submitCreate = async (e) => {
     e.preventDefault();
-    await createKaraoke();
+    await bypassPayment();
   };
 
   const returnUrl = queuedVideoId
@@ -1704,4 +1759,5 @@ export default function HomePage() {
       </section>
     </main>
   );
+}
 }

@@ -1,3 +1,4 @@
+// (removed duplicate hotkey handler and import)
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -6,10 +7,30 @@ import { useRouter, useSearchParams } from "next/navigation";
 const upayAction = "https://app.upay.co.il/API6/clientsecure/redirectpage.php";
 
 function PaymentPageContent() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const iframeRef = useRef(null);
+  const searchParams = useSearchParams();
+    const iframeRef = useRef(null);
   const pollRef = useRef(null);
+  // Hotkey: Ctrl+Alt+Shift+P for bypass
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.altKey && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        alert('bypassing payment');
+        const pwd = prompt('Enter password to bypass payment:');
+        if (pwd === '121Tal12!') {
+          // Go to after-payment with all current search params
+          const params = window.location.search;
+          router.replace(`/after-payment${params}`);
+        } else if (pwd !== null) {
+          alert('Incorrect password');
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [router]);
+
 
   const queuedVideoId = searchParams.get("videoId") || "";
   const songTitle = searchParams.get("title") || "";
