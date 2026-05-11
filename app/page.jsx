@@ -111,6 +111,22 @@ export default function HomePage() {
   });
 
   // New: fetch video data by videoId if user enters a bare videoId or youtu.be short link
+  // Helper to sanitize title by removing artist and separators
+  function sanitizeTitle(title, artist) {
+    if (!title) return "";
+    let t = title;
+    if (artist) {
+      // Remove artist name (with or without spaces, case-insensitive)
+      const artistPattern = artist.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      t = t.replace(new RegExp(artistPattern, "gi"), "");
+    }
+    // Remove common separators and extra dashes
+    t = t.replace(/[-–—:|•~]+/g, " ");
+    // Remove double spaces
+    t = t.replace(/\s{2,}/g, " ").trim();
+    return t;
+  }
+
   useEffect(() => {
     const val = youtubeUrl.trim();
     const videoId = extractVideoId(val);
@@ -140,11 +156,12 @@ export default function HomePage() {
           setShowSongDropdown(false);
           return;
         }
-        setInputSongTitle(data.title || "");
+        const sanitized = sanitizeTitle(data.title || "", data.artist || "");
+        setInputSongTitle(sanitized);
         setInputSongArtist(data.artist || "");
         setInputSongDuration(data.duration || "");
         setYoutubeDisplayValue([
-          data.title,
+          sanitized,
           data.duration
         ].filter(Boolean).join(" / "));
 
@@ -152,7 +169,7 @@ export default function HomePage() {
         setSongSearchResults([
           {
             id: `direct-${videoId}`,
-            title: data.title,
+            title: sanitized,
             artist: data.artist,
             duration: data.duration,
             youtubeUrl: data.url || val,
@@ -1188,7 +1205,9 @@ export default function HomePage() {
     }
     setIsCreating(true);
     setStatus({ type: "idle", message: "" });
-    let waMessage = `✅ Your request was received.\n📞 Phone: 972${normalizedPhone.slice(1)}\n🎵 Title: ${inputSongTitle || `YouTube ${videoId}`}\n⏱️ Duration: ${activeExample?.duration || "Unknown"}\n🔗 YouTube: ${youtubeUrl}\n🎤 We will update you here once karaoke is ready.`;
+    // Use sanitized title and artist
+    const sanitized = sanitizeTitle(inputSongTitle, inputSongArtist);
+    let waMessage = `✅ Your request was received.\n📞 Phone: 972${normalizedPhone.slice(1)}\n🎵 Title: ${sanitized}\n👤 Artist: ${inputSongArtist}\n⏱️ Duration: ${activeExample?.duration || "Unknown"}\n🔗 YouTube: ${youtubeUrl}\n🎤 We will update you here once karaoke is ready.`;
     let waFailed = false;
     try {
       const waResponse = await fetch("/api/submit-request", {
@@ -1201,6 +1220,8 @@ export default function HomePage() {
           youtubeUrl,
           videoId,
           lang,
+          title: sanitized,
+          artist: inputSongArtist,
         }),
       });
       const waData = await waResponse.json();
@@ -1224,7 +1245,8 @@ export default function HomePage() {
         body: JSON.stringify([
           {
             videoId,
-            title: inputSongTitle || `YouTube ${videoId}`,
+            title: sanitized,
+            artist: inputSongArtist,
             duration: activeExample?.duration || "N/A",
             meta: {
               fromPhone: `972${normalizedPhone.slice(1)}`,
@@ -1239,7 +1261,7 @@ export default function HomePage() {
       }
       setIsInPendingQueue(true);
       setQueuedVideoId(data.videoId || videoId);
-      setSongTitle(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`);
+      setSongTitle(data?.entry?.title || sanitized);
       setStatus({
         type: "success",
         message: waFailed ? "Karaoke request created. WhatsApp notification failed." : "Karaoke request created and WhatsApp sent. Bypassing payment...",
@@ -1249,7 +1271,7 @@ export default function HomePage() {
       }
       // Redirect to after-payment
       window.location.assign(
-        `${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(data?.entry?.title || inputSongTitle || `YouTube ${videoId}`)}`
+        `${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}`
       );
     } catch (err) {
       setStatus({
