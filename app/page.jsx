@@ -114,7 +114,11 @@ export default function HomePage() {
   useEffect(() => {
     const val = youtubeUrl.trim();
     const videoId = extractVideoId(val);
-    if (!videoId) return;
+    if (!videoId) {
+      setSongSearchResults([]);
+      setShowSongDropdown(false);
+      return;
+    }
 
     setPreviewVideoId(videoId);
     setPreviewNonce((n) => n + 1);
@@ -131,16 +135,37 @@ export default function HomePage() {
     })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
-        if (!data) return;
+        if (!data) {
+          setSongSearchResults([]);
+          setShowSongDropdown(false);
+          return;
+        }
         setInputSongTitle(data.title || "");
         setInputSongArtist(data.artist || "");
         setInputSongDuration(data.duration || "");
-        // Set display value to title + duration, like on dropdown pick
-        setYoutubeDisplayValue(
-          [data.title, data.duration].filter(Boolean).join(" / ")
-        );
+        setYoutubeDisplayValue([
+          data.title,
+          data.duration
+        ].filter(Boolean).join(" / "));
+
+        // Show dropdown with one result for direct YT link
+        setSongSearchResults([
+          {
+            id: `direct-${videoId}`,
+            title: data.title,
+            artist: data.artist,
+            duration: data.duration,
+            youtubeUrl: data.url || val,
+            image: data.image,
+            isDirect: true,
+          }
+        ]);
+        setShowSongDropdown(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setSongSearchResults([]);
+        setShowSongDropdown(false);
+      });
   }, [youtubeUrl]);
 
   // ...existing code...
@@ -1361,9 +1386,9 @@ export default function HomePage() {
                       className="search-dropdown-item"
                       onClick={() => handleSongPick(song)}
                     >
-                      {getSongThumbnail(song) ? (
+                      {song.image || getSongThumbnail(song) ? (
                         <img
-                          src={getSongThumbnail(song)}
+                          src={song.image || getSongThumbnail(song)}
                           alt="YouTube thumbnail"
                           className="search-dropdown-thumb"
                           loading="lazy"
@@ -1373,6 +1398,9 @@ export default function HomePage() {
                         <span className="search-dropdown-title">{song.title}</span>
                         {song.artist ? (
                           <span className="search-dropdown-sub">{song.artist}</span>
+                        ) : null}
+                        {song.duration ? (
+                          <span className="search-dropdown-sub">{song.duration}</span>
                         ) : null}
                       </span>
                     </button>
