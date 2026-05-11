@@ -1452,20 +1452,20 @@ export default function HomePage() {
                 >
                   {isCreating ? ui.creating : ui.create}
                 </button>
-                {/* Bypass payment button is hidden but remains in DOM for hotkey handler */}
-                <button
-                  type="button"
-                  disabled={!canCreate || isCreating}
-                  className="primary-cta create-cta-button bypass-payment-btn"
-                  style={{ display: 'none' }}
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  onClick={bypassPayment}
-                >
-                  Bypass Payment
-                </button>
               </>
             )}
+            {/* Bypass payment button is always present (hidden) for hotkey handler */}
+            <button
+              type="button"
+              disabled={!canCreate || isCreating}
+              className="primary-cta create-cta-button bypass-payment-btn"
+              style={{ display: 'none' }}
+              tabIndex={-1}
+              aria-hidden="true"
+              onClick={bypassPayment}
+            >
+              Bypass Payment
+            </button>
           </div>
         </form>
 
