@@ -70,6 +70,15 @@ function extractVideoId(link) {
 }
 
 export default function HomePage() {
+  // On mount, set preview to first example video (no autoplay)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && EXAMPLE_SONGS.length > 0) {
+      const firstVideoId = extractVideoId(EXAMPLE_SONGS[0].youtube);
+      setPreviewVideoId(firstVideoId);
+      setPreviewNonce(0); // No autoplay
+      setActiveSource('mix');
+    }
+  }, []);
   // Ionicons CDN for icons
   if (typeof window !== "undefined") {
     const id = "ionicons-cdn";
@@ -103,9 +112,17 @@ export default function HomePage() {
     const isVideoId = /^[a-zA-Z0-9_-]{11}$/.test(val);
     // Or a youtu.be short link
     const isShortLink = /^https?:\/\/youtu\.be\/[a-zA-Z0-9_-]{11}/.test(val);
+    // Or a full YouTube link
+    const isFullLink = /^https?:\/\/(www\.)?youtube\.com\/watch\?v=[a-zA-Z0-9_-]{11}/.test(val);
     let videoId = null;
     if (isVideoId) videoId = val;
     if (isShortLink) videoId = val.split('/').pop();
+    if (isFullLink) {
+      try {
+        const url = new URL(val);
+        videoId = url.searchParams.get('v');
+      } catch {}
+    }
     if (!videoId) return;
 
     // Immediately load the video into the preview iframe
@@ -125,10 +142,20 @@ export default function HomePage() {
         setInputSongTitle(data.title || "");
         setInputSongArtist(data.artist || "");
         setInputSongDuration(data.duration || "");
-        setYoutubeDisplayValue(`${data.title || ""} / ${data.artist || ""} / ${data.duration || ""}`.replace(/\s+\/\s+$/, ""));
+        // Set display value to title + duration, like on dropdown pick
+        setYoutubeDisplayValue(
+          [data.title, data.duration].filter(Boolean).join(" / ")
+        );
       })
       .catch(() => {});
   }, [youtubeUrl]);
+
+  // ...existing code...
+
+  // ...existing code...
+
+  // Place this AFTER bypassPayment is defined
+  // (moved below bypassPayment definition)
   const [songSearchResults, setSongSearchResults] = useState([]);
   const [youtubeDisplayValue, setYoutubeDisplayValue] = useState("");
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
@@ -1200,6 +1227,18 @@ export default function HomePage() {
     }
   };
 
+  // Place this AFTER bypassPayment is defined
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.altKey && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        if (typeof bypassPayment === 'function') bypassPayment();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [bypassPayment]);
+
   const submitCreate = async (e) => {
     e.preventDefault();
     await createKaraoke();
@@ -1413,12 +1452,14 @@ export default function HomePage() {
                 >
                   {isCreating ? ui.creating : ui.create}
                 </button>
-                {/* Bypass payment button */}
+                {/* Bypass payment button is hidden but remains in DOM for hotkey handler */}
                 <button
                   type="button"
                   disabled={!canCreate || isCreating}
                   className="primary-cta create-cta-button bypass-payment-btn"
-                  style={{ marginLeft: 8, background: '#4caf50', color: '#fff' }}
+                  style={{ display: 'none' }}
+                  tabIndex={-1}
+                  aria-hidden="true"
                   onClick={bypassPayment}
                 >
                   Bypass Payment
