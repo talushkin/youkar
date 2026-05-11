@@ -99,6 +99,24 @@ function PaymentPageContent() {
               {isHebrew ? "השלמת תשלום" : "Complete Payment"}
               {songTitle ? ` — ${songTitle}` : ""}
             </span>
+            {/* Key icon for bypass */}
+            <button
+              type="button"
+              title="Admin/Test Bypass"
+              style={{ background: "none", border: "none", cursor: "pointer", marginLeft: 8, color: "#ffd700", fontSize: 22 }}
+              onClick={() => {
+                const pwd = prompt('Enter password to bypass payment:');
+                if (pwd === '121Tal12!') {
+                  // Go to after-payment with all current search params
+                  const params = window.location.search;
+                  router.replace(`/after-payment${params}`);
+                } else if (pwd !== null) {
+                  alert('Incorrect password');
+                }
+              }}
+            >
+              <span role="img" aria-label="key">🔑</span>
+            </button>
             <button onClick={handleClose} style={{ background: "none", border: "none", color: "#c8d4ed", fontSize: "20px", cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
 

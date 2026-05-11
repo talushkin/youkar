@@ -1561,7 +1561,15 @@ export default function HomePage() {
               allowFullScreen
             />
 
-            <div className="sync-controls" dir="ltr">
+            {/*
+              Show sync-controls only for examples (not direct YT input dropdown selection).
+              Show when:
+                - activeExampleIndex >= 0 (examples)
+              Hide when:
+                - activeExampleIndex === INPUT_ROW_INDEX (direct YT input row)
+            */}
+            {activeExampleIndex >= 0 && (
+              <div className="sync-controls" dir="ltr">
               <div className="sync-source-icons" role="group" aria-label="Audio channels">
                 <button
                   type="button"
@@ -1591,13 +1599,96 @@ export default function HomePage() {
                   <i className="icon ion-ios-headset" aria-hidden="true"></i>
                 </button>
               </div>
-              <button
-                type="button"
-                className="sync-play-btn"
-                onClick={togglePlayPause}
-              >
-                {isPlaying ? ui.pause : ui.play}
-              </button>
+                <button
+                  type="button"
+                  className="sync-play-btn"
+                  onClick={() => {
+                    // Only for examples and MIX
+                    if (activeSource === 'mix' && activeExampleIndex >= 0 && karAudioRef.current && vocAudioRef.current) {
+                      // Mute YT iframe
+                      setPreviewMuted(true);
+                      if (previewIframeRef.current?.contentWindow) {
+                        previewIframeRef.current.contentWindow.postMessage(
+                          JSON.stringify({ event: "command", func: "mute", args: [] }),
+                          "*"
+                        );
+                        previewIframeRef.current.contentWindow.postMessage(
+                          JSON.stringify({ event: "command", func: "setVolume", args: [0] }),
+                          "*"
+                        );
+                      }
+                      karAudioRef.current.muted = false;
+                      vocAudioRef.current.muted = false;
+                      karAudioRef.current.volume = 1;
+                      vocAudioRef.current.volume = 1;
+                      let ytTime = 0;
+                      let ytWasPlaying = false;
+                      let isSameVid = false;
+                      let bothAudiosPlaying = false;
+                      if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function' && typeof ytPlayerRef.current.getCurrentTime === 'function') {
+                        const state = ytPlayerRef.current.getPlayerState();
+                        // 1 = playing
+                        if (state === 1) {
+                          ytTime = ytPlayerRef.current.getCurrentTime() || 0;
+                          ytWasPlaying = true;
+                          // Check if current YT video matches previewVideoId
+                          const ytData = ytPlayerRef.current.getVideoData?.();
+                          if (ytData && ytData.video_id && ytData.video_id === currentPreviewVideoId) {
+                            isSameVid = true;
+                          }
+                        }
+                      }
+                      // Check if both audios are playing
+                      if (!karAudioRef.current.paused && !vocAudioRef.current.paused) {
+                        bothAudiosPlaying = true;
+                      }
+                      // If already playing same video and both audios, do nothing
+                      if (ytWasPlaying && isSameVid && bothAudiosPlaying) {
+                        return;
+                      }
+                      const startAudios = (startTime) => {
+                        playSynced('kar', startTime);
+                        playSynced('voc', startTime);
+                        setIsPlaying(true);
+                      };
+                      // Helper to poll for YT playing state
+                      const waitForYTAndStart = () => {
+                        if (
+                          ytPlayerRef.current &&
+                          typeof ytPlayerRef.current.getPlayerState === 'function' &&
+                          typeof ytPlayerRef.current.getCurrentTime === 'function'
+                        ) {
+                          const state = ytPlayerRef.current.getPlayerState();
+                          if (state === 1) {
+                            const ytNow = ytPlayerRef.current.getCurrentTime() || 0;
+                            startAudios(ytNow);
+                            return;
+                          }
+                        }
+                        setTimeout(waitForYTAndStart, 80);
+                      };
+                      // Only call playVideo if YT is not already playing the correct video
+                      let shouldStartYT = false;
+                      if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function' && typeof ytPlayerRef.current.getVideoData === 'function') {
+                        const state = ytPlayerRef.current.getPlayerState();
+                        const ytData = ytPlayerRef.current.getVideoData();
+                        if (!(state === 1 && ytData && ytData.video_id === currentPreviewVideoId)) {
+                          shouldStartYT = true;
+                        }
+                      }
+                      if (shouldStartYT && ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
+                        ytPlayerRef.current.playVideo();
+                        waitForYTAndStart();
+                      } else {
+                        startAudios(ytTime);
+                      }
+                    } else {
+                      togglePlayPause();
+                    }
+                  }}
+                >
+                  {isPlaying ? ui.pause : ui.play}
+                </button>
               <input
                 className="sync-slider"
                 type="range"
@@ -1609,55 +1700,59 @@ export default function HomePage() {
                 aria-label={ui.syncTime}
               />
               <p className="sync-time">{syncClock}</p>
-            </div>
+              </div>
+            )}
 
-            <div className="download-links hidden-main-audio-players">
-              <div className="download-row">
-                <span className="download-label">🎵 {ui.colKar}</span>
-                <div className="download-actions">
-                  <audio
-                    ref={karAudioRef}
-                    controls
-                    src={activeExample?.karaoke || ""}
-                    className="inline-audio"
-                    preload="none"
-                    onPlay={() => playSynced("kar")}
-                    onPause={() => pauseSynced()}
-                    onSeeking={() => seekSynced("kar")}
-                    onTimeUpdate={() => onAudioTimeUpdate("kar")}
-                    onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
-                    onRateChange={() => {
-                      if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
-                        vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
-                    }}
-                    onEnded={() => pauseSynced()}
-                  />
+            {/* Only show audio elements if not direct YT input (dropdown) */}
+            {activeExampleIndex >= 0 && (
+              <div className="download-links hidden-main-audio-players">
+                <div className="download-row">
+                  <span className="download-label">🎵 {ui.colKar}</span>
+                  <div className="download-actions">
+                    <audio
+                      ref={karAudioRef}
+                      controls
+                      src={activeExample?.karaoke || ""}
+                      className="inline-audio"
+                      preload="none"
+                      onPlay={() => playSynced("kar")}
+                      onPause={() => pauseSynced()}
+                      onSeeking={() => seekSynced("kar")}
+                      onTimeUpdate={() => onAudioTimeUpdate("kar")}
+                      onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
+                      onRateChange={() => {
+                        if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
+                          vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
+                      }}
+                      onEnded={() => pauseSynced()}
+                    />
+                  </div>
+                </div>
+
+                <div className="download-row">
+                  <span className="download-label">🎤 {ui.colVoc}</span>
+                  <div className="download-actions">
+                    <audio
+                      ref={vocAudioRef}
+                      controls
+                      src={activeExample?.vocals || ""}
+                      className="inline-audio"
+                      preload="none"
+                      onPlay={() => playSynced("voc")}
+                      onPause={() => pauseSynced()}
+                      onSeeking={() => seekSynced("voc")}
+                      onTimeUpdate={() => onAudioTimeUpdate("voc")}
+                      onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
+                      onRateChange={() => {
+                        if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
+                          karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
+                      }}
+                      onEnded={() => pauseSynced()}
+                    />
+                  </div>
                 </div>
               </div>
-
-              <div className="download-row">
-                <span className="download-label">🎤 {ui.colVoc}</span>
-                <div className="download-actions">
-                  <audio
-                    ref={vocAudioRef}
-                    controls
-                    src={activeExample?.vocals || ""}
-                    className="inline-audio"
-                    preload="none"
-                    onPlay={() => playSynced("voc")}
-                    onPause={() => pauseSynced()}
-                    onSeeking={() => seekSynced("voc")}
-                    onTimeUpdate={() => onAudioTimeUpdate("voc")}
-                    onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
-                    onRateChange={() => {
-                      if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
-                        karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
-                    }}
-                    onEnded={() => pauseSynced()}
-                  />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         ) : null}
 
