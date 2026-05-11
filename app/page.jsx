@@ -166,9 +166,13 @@ export default function HomePage() {
         setInputSongTitle(sanitized);
         setInputSongArtist(artistFromBE);
         setInputSongDuration(data.duration || "");
+        alert(
+          `Sanitized Title: ${sanitized}\nArtist: ${artistFromBE}\nDuration: ${data.duration}`
+        );
         setYoutubeDisplayValue([
           sanitized,
-          data.duration
+          data.duration,
+          artistFromBE ? `(artist: ${artistFromBE})` : null
         ].filter(Boolean).join(" / "));
 
         // Show dropdown with one result for direct YT link
@@ -1209,10 +1213,14 @@ export default function HomePage() {
       });
       return;
     }
+    // Alert on create
+    const sanitized = sanitizeTitle(inputSongTitle, inputSongArtist);
+    alert(
+      `Sanitized Title: ${sanitized}\nArtist: ${inputSongArtist}\nDuration: ${activeExample?.duration || "Unknown"}`
+    );
     setIsCreating(true);
     setStatus({ type: "idle", message: "" });
     // Use sanitized title and artist
-    const sanitized = sanitizeTitle(inputSongTitle, inputSongArtist);
     let waMessage = `✅ Your request was received.\n📞 Phone: 972${normalizedPhone.slice(1)}\n🎵 Title: ${sanitized}\n👤 Artist: ${inputSongArtist}\n⏱️ Duration: ${activeExample?.duration || "Unknown"}\n🔗 YouTube: ${youtubeUrl}\n🎤 We will update you here once karaoke is ready.`;
     let waFailed = false;
     try {

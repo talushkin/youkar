@@ -22,6 +22,7 @@ const copy = {
     returnToPayment: "← חזור לתשלום",
     missingVideoId: "חסר מזהה וידאו. אנא חזור לדף הבית ונסה שוב.",
     songPreview: "תצוגת שיר",
+    ready: "הקבצים שלך מוכנים! 🎤",
     errorFallback: "לא ניתן לאמת את סטטוס הקובץ. הקישורים מוצגים בכל מקרה.",
   },
   en: {
@@ -282,7 +283,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           if (hasKaraoke && hasVocals) {
             setKaraokeUrl(karLink);
             setVocalsUrl(vocLink);
-            setStatus({ type: "success", message: "Your files are ready! 🎤" });
+            setStatus({ type: "success", message: lang === "he" ? copy.he.ready : copy.en.ready });
 
             // Send WA notification once (only if phone available)
             if (phone && !waReadySentRef.current) {
@@ -337,12 +338,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
 
   if (isPaymentError) {
     return (
-      <main className="page-bg" dir="ltr">
-        <section className="card after-payment-card">
-          <h1 className="error-title">❌ Payment Failed</h1>
+      <main className="page-bg" dir={ui.dir}>
+        <section className="card after-payment-card" dir={ui.dir}>
+          <h1 className="error-title">{ui.paymentFailed}</h1>
           <p className={`result error`}>{errorDescription}</p>
           <a href="/api/create-karaoke" className="back-payment-btn">
-            ← Return to Payment
+            {ui.returnToPayment}
           </a>
         </section>
       </main>
@@ -350,10 +351,10 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   }
 
   return (
-    <main className="page-bg" dir="ltr">
-      <section className="card after-payment-card">
-        <h1 className="thank-you-title">🎉 Thank You for Your Purchase!</h1>
-        <p className="lead">Your karaoke &amp; vocals files are being prepared below.</p>
+    <main className="page-bg" dir={ui.dir}>
+      <section className="card after-payment-card" dir={ui.dir}>
+        <h1 className="thank-you-title">{ui.thankYou}</h1>
+        <p className="lead">{ui.lead}</p>
 
         {videoId && (
           <div className="yt-embed-wrap">
@@ -414,7 +415,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
 
         {!isPending && (
           <div className="download-links">
-            <h2>Your Files</h2>
+            <h2>{ui.ready}</h2>
 
             <div className="sync-controls" dir="ltr">
               <div className="sync-source-icons" role="group" aria-label="Audio channels">
@@ -561,7 +562,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           </div>
         )}
 
-        <a href="/" target="_top" className="back-home-btn">← Create another karaoke</a>
+        <a href="/" target="_top" className="back-home-btn">{ui.backHome}</a>
       </section>
     </main>
   );
