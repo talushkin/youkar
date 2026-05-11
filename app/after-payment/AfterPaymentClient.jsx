@@ -45,15 +45,13 @@ const copy = {
   },
 };
 
-export default function AfterPaymentClient({ videoId, errorDescription, phone, title }) {
-  const [lang, setLang] = useState("he");
+export default function AfterPaymentClient({ videoId, errorDescription, phone, title, artist = "", lang: initialLang }) {
+  // Always prefer the lang prop from searchParams (from URL)
+  const lang = initialLang === "en" ? "en" : "he";
+  // Defensive: force all UI strings to Hebrew if lang is he
+  const ui = lang === "he" ? copy.he : copy.en;
 
-  useEffect(() => {
-    const stored = localStorage.getItem("youkar-lang");
-    if (stored === "en" || stored === "he") setLang(stored);
-  }, []);
-
-  const ui = copy[lang] || copy.he;
+  // artist is now available as a prop for display if needed
 
   const [status, setStatus] = useState({
     type: "pending",
@@ -373,13 +371,13 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         <div className="lyrics-links" style={{ display: 'flex', gap: '3rem', justifyContent: 'center', margin: '1.5rem 0' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, marginBottom: 4 }}>
-              CHORDS / אקורדים לשיר{title ? ` ${encodeURIComponent(title)}` : ''}
+              CHORDS / אקורדים לשיר
             </span>
             <a
               href={`https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title || "")}`}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Tab4U Chords for ${title || ''}`}
+              title={`Tab4U Chords`}
               style={{ display: 'inline-flex', alignItems: 'center' }}
             >
               <img src="/tab4uPclogo.svg" alt="Tab4U" style={{ width: 50, height: 30, objectFit: 'contain', marginRight: 8 }} />
@@ -388,13 +386,13 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, marginBottom: 4 }}>
-              LYRICS / מילים לשיר{title ? ` ${encodeURIComponent(title)}` : ''}
+              LYRICS / מילים לשיר
             </span>
             <a
               href={`https://shironet.mako.co.il/search?q=${encodeURIComponent(title || "")}`}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Shironet Lyrics for ${title || ''}`}
+              title={`Shironet Lyrics`}
               style={{ display: 'inline-flex', alignItems: 'center' }}
             >
               <img src="/shironet.gif" alt="Shironet" style={{ width: 50, height: 30, objectFit: 'contain', marginRight: 8 }} />

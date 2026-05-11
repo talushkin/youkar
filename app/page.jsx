@@ -156,9 +156,15 @@ export default function HomePage() {
           setShowSongDropdown(false);
           return;
         }
-        const sanitized = sanitizeTitle(data.title || "", data.artist || "");
+        // Debug: Alert video data from backend
+        alert(
+          `Video Data from BE:\nTitle: ${data.title}\nArtist: ${data.artist}\nDuration: ${data.duration}\nImage: ${data.image}\nURL: ${data.url}`
+        );
+        // Always set artist from backend response
+        const artistFromBE = data.artist || "";
+        const sanitized = sanitizeTitle(data.title || "", artistFromBE);
         setInputSongTitle(sanitized);
-        setInputSongArtist(data.artist || "");
+        setInputSongArtist(artistFromBE);
         setInputSongDuration(data.duration || "");
         setYoutubeDisplayValue([
           sanitized,
@@ -170,7 +176,7 @@ export default function HomePage() {
           {
             id: `direct-${videoId}`,
             title: sanitized,
-            artist: data.artist,
+            artist: artistFromBE,
             duration: data.duration,
             youtubeUrl: data.url || val,
             image: data.image,
@@ -1261,7 +1267,7 @@ export default function HomePage() {
       }
       setIsInPendingQueue(true);
       setQueuedVideoId(data.videoId || videoId);
-      setSongTitle(data?.entry?.title || sanitized);
+      setSongTitle(sanitized);
       setStatus({
         type: "success",
         message: waFailed ? "Karaoke request created. WhatsApp notification failed." : "Karaoke request created and WhatsApp sent. Bypassing payment...",
@@ -1302,11 +1308,12 @@ export default function HomePage() {
   };
 
   const returnUrl = queuedVideoId
-    ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(songTitle)}`
+    ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(songTitle)}&artist=${encodeURIComponent(inputSongArtist)}`
     : returnUrlBase;
 
+  // Always use sanitized title for payment
   const paymentIframeUrl = queuedVideoId
-    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}`
+    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&artist=${encodeURIComponent(inputSongArtist)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}`
     : null;
 
   const paymentNavigatedRef = useRef(false);
