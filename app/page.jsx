@@ -4,7 +4,11 @@ import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const returnUrlBase =
-  process.env.NEXT_PUBLIC_RETURN_URL || "https://youkar.vercel.app/after-payment";
+  (typeof window !== "undefined"
+    ? (window.location.hostname === "localhost"
+        ? process.env.NEXT_PUBLIC_FRONTEND_URL_DEV
+        : process.env.NEXT_PUBLIC_FRONTEND_URL_PROD)
+    : process.env.NEXT_PUBLIC_FRONTEND_URL_PROD) + "/after-payment";
 
 const DEFAULT_YT_QUERY = {
   he: "שלמה ארצי",
