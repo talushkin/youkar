@@ -368,7 +368,40 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           </div>
         )}
 
-        {/* Lyrics Links */}
+        {/* WhatsApp share link for user */}
+        {phone && videoId && title && (
+          <div style={{ margin: '1.5rem 0', textAlign: 'center' }}>
+            <a
+              href={(() => {
+                // Build WhatsApp message with ASCII symbols
+                const phoneDigits = String(phone).replace(/^0/, '');
+                const waPhone = `972${phoneDigits}`;
+                const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                const karUrl = `${CDN_BASE}/${videoId}/karaoke.mp3`;
+                const vocUrl = `${CDN_BASE}/${videoId}/vocals.mp3`;
+                const shironetUrl = `https://shironet.mako.co.il/search?q=${encodeURIComponent(title)}`;
+                const tab4uUrl = `https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title)}`;
+                const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}`;
+                const msg =
+                  `*${title}* — ${artist || ''}\n` +
+                  `# אורך: ${syncDuration ? formatClock(syncDuration) : ''}\n` +
+                  `# מהטלפון: ${waPhone}\n` +
+                  `# יוטיוב: ${ytUrl}\n\n` +
+                  `- [קריוקי בלבד](${karUrl})\n` +
+                  `- [שירה בלבד](${vocUrl})\n` +
+                  `- [מילים בשירונט](${shironetUrl})\n` +
+                  `- [אקורדים TAB4U](${tab4uUrl})\n` +
+                  `- [דף הורדה](${afterPaymentUrl})\n`;
+                return `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-block', background: '#25D366', color: '#fff', padding: '0.5rem 1.2rem', borderRadius: 8, fontWeight: 600, fontSize: 18, textDecoration: 'none', marginBottom: 12 }}
+            >
+              שלח את כל פרטי השיר ב-WhatsApp
+            </a>
+          </div>
+        )}
         <div className="lyrics-links" style={{ display: 'flex', gap: '3rem', justifyContent: 'center', margin: '1.5rem 0' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, marginBottom: 4 }}>

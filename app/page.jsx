@@ -75,6 +75,16 @@ function extractVideoId(link) {
 }
 
 export default function HomePage() {
+  // On mount, check clipboard for YouTube link and auto-insert if found
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.readText().then((clipText) => {
+        if (clipText && clipText.trim().toLowerCase().startsWith('https://www.yo')) {
+          setYoutubeUrl(clipText.trim());
+        }
+      }).catch(() => {});
+    }
+  }, []);
   // On mount, set preview to first example video (no autoplay)
   useEffect(() => {
     if (typeof window !== 'undefined' && EXAMPLE_SONGS.length > 0) {
