@@ -33,7 +33,11 @@ function PaymentPageContent() {
 
   const queuedVideoId = searchParams.get("videoId") || "";
   const songTitle = searchParams.get("title") || "";
-  const returnUrl = searchParams.get("returnUrl") || `${typeof window !== "undefined" ? window.location.origin : "https://youkar.vercel.app"}/after-payment`;
+  let paramReturnUrl = searchParams.get("returnUrl");
+  if (!paramReturnUrl || paramReturnUrl === "undefined") {
+    paramReturnUrl = `${typeof window !== "undefined" ? window.location.origin : "https://youkar.vercel.app"}/after-payment`;
+  }
+  const returnUrl = paramReturnUrl;
   const appLang = (searchParams.get("lang") || "en").toLowerCase();
   const upayLang = appLang === "he" ? "HE" : "EN";
   const isHebrew = appLang === "he";
