@@ -94,6 +94,19 @@ export default function AllTracksPage() {
 
   // טען 10 שורות בלבד מתוך הרשימה המקומית (ללא fetch מהשרת)
   useEffect(() => {
+    // Try to load from localStorage first
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('allTracksMeta') : null;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length === localMetaFiles.length) {
+          setTracks(parsed);
+          allTracksRef.current = parsed;
+          setLoading(false);
+          return;
+        }
+      } catch {}
+    }
     setLoading(true);
     // Prepare placeholder tracks for immediate rendering
     const placeholders = localMetaFiles.map(obj => {
@@ -117,6 +130,7 @@ export default function AllTracksPage() {
     allTracksRef.current = placeholders;
 
     // For each, fetch cdn-links and update as soon as data arrives
+    let loadedCount = 0;
     placeholders.forEach((track, idx) => {
       if (!track.videoId) return;
       fetch(`/api/cdn-links?videoId=${track.videoId}`)
@@ -138,6 +152,13 @@ export default function AllTracksPage() {
               loading: false
             };
             allTracksRef.current = updated;
+            // Store in localStorage if all loaded
+            loadedCount++;
+            if (loadedCount === placeholders.length) {
+              try {
+                localStorage.setItem('allTracksMeta', JSON.stringify(updated));
+              } catch {}
+            }
             return updated;
           });
         });
@@ -162,12 +183,13 @@ export default function AllTracksPage() {
   }, [tracks, search]);
 
   const filteredCount = filtered.length;
-  const pageCount = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
-  const pageStart = (page - 1) * PAGE_SIZE;
-  const pageEnd = page * PAGE_SIZE;
-  const paged = filtered.slice(pageStart, pageEnd);
-  const fromIdx = filteredCount === 0 ? 0 : pageStart + 1;
-  const toIdx = Math.min(pageEnd, filteredCount);
+  // Paging disabled: show all results on one page
+  // const pageCount = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
+  // const pageStart = (page - 1) * PAGE_SIZE;
+  // const pageEnd = page * PAGE_SIZE;
+  const paged = filtered;
+  const fromIdx = filteredCount === 0 ? 0 : 1;
+  const toIdx = filteredCount;
 
 
       // Reset page to 1 if filteredCount changes and current page is out of range
@@ -191,7 +213,7 @@ export default function AllTracksPage() {
         />
       </div>
       <div style={{ margin: "8px 0", textAlign: 'center', fontWeight: 500 }}>
-        עמוד {page} מתוך {pageCount} | מציג {fromIdx}-{toIdx} מתוך {filteredCount} תוצאות (מתוך {total})
+        מציג {fromIdx}-{toIdx} מתוך {filteredCount} תוצאות (מתוך {total})
       </div>
       {/* גריד 4 עמודות, כל עמודה עם כל הכותרות */}
       <div style={{
@@ -280,6 +302,8 @@ export default function AllTracksPage() {
           ))
         )}
       </div>
+      {/* Paging controls commented out */}
+      {/*
       <div style={{ margin: "8px 0", display: "flex", gap: 8, justifyContent: 'center' }}>
         <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>הקודם</button>
         <button
@@ -290,6 +314,7 @@ export default function AllTracksPage() {
           onClick={() => setPage(p => Math.min(page + 1, Math.ceil(total / PAGE_SIZE)))}
         >הבא</button>
       </div>
+      */}
     </div>
   );
 }
