@@ -1,6 +1,8 @@
+
+
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import allJson from "./all.json";
 import TrackBox from "./TrackBox";
 import { fetchRequestsData } from "./requests-fetch";
@@ -11,10 +13,12 @@ export default function AllTracksPage() {
   // סינון meta.json מקומי כברירת מחדל
   const localMetaFiles = (allJson.contents || []).filter(obj => obj.Key && obj.Key.endsWith("/meta.json"));
   const [tracks, setTracks] = useState([]);
+  const allTracksRef = useRef([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [error, setError] = useState("");
+
 
   // useEffect(() => {
   //   async function fetchTracks() {
@@ -92,7 +96,7 @@ export default function AllTracksPage() {
   useEffect(() => {
     setLoading(true);
     // Prepare placeholder tracks for immediate rendering
-    const placeholders = localMetaFiles.slice(0, 50).map(obj => {
+    const placeholders = localMetaFiles.map(obj => {
       const match = obj.Key.match(/^tracks\/([^/]+)\/meta\.json$/);
       const videoId = match ? match[1] : null;
       const folder = obj.Key.replace(/\/meta\.json$/, "");
@@ -110,6 +114,7 @@ export default function AllTracksPage() {
       };
     });
     setTracks(placeholders);
+    allTracksRef.current = placeholders;
 
     // For each, fetch cdn-links and update as soon as data arrives
     placeholders.forEach((track, idx) => {
@@ -132,6 +137,7 @@ export default function AllTracksPage() {
               duration: apiData.duration || apiData.meta?.duration || null,
               loading: false
             };
+            allTracksRef.current = updated;
             return updated;
           });
         });
@@ -139,7 +145,9 @@ export default function AllTracksPage() {
     setLoading(false);
   }, []);
 
-  // Filter and sort
+
+  // Always filter/sort the full tracks array, then slice for the current page
+  const total = localMetaFiles.length;
   const filtered = useMemo(() => {
     let arr = tracks;
     if (search.length >= 3) {
@@ -149,30 +157,41 @@ export default function AllTracksPage() {
         (t.artist && t.artist.toLowerCase().includes(q))
       );
     }
-    arr = arr.sort((a, b) => b.requests - a.requests);
+    arr = arr.slice().sort((a, b) => b.requests - a.requests);
     return arr;
   }, [tracks, search]);
 
-  const total = tracks.length;
   const filteredCount = filtered.length;
-  const pageCount = Math.ceil(filteredCount / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const fromIdx = filteredCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const toIdx = Math.min(page * PAGE_SIZE, filteredCount);
+  const pageCount = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
+  const pageStart = (page - 1) * PAGE_SIZE;
+  const pageEnd = page * PAGE_SIZE;
+  const paged = filtered.slice(pageStart, pageEnd);
+  const fromIdx = filteredCount === 0 ? 0 : pageStart + 1;
+  const toIdx = Math.min(pageEnd, filteredCount);
+
+
+      // Reset page to 1 if filteredCount changes and current page is out of range
+  useEffect(() => {
+    if (page > 1 && (page - 1) * PAGE_SIZE >= filteredCount) {
+      setPage(1);
+    }
+  }, [filteredCount]);
 
   return (
     <div style={{ fontSize: 12, padding: 8 }}>
       <h2 style={{ fontSize: 14, margin: "8px 0" }}>
         כל השירים: {total} | תוצאות מסוננות: {filteredCount}
       </h2>
-      <input
-        style={{ fontSize: 12, marginBottom: 8, width: 220 }}
-        placeholder="חפש לפי שם/אמן (3 אותיות ומעלה)"
-        value={search}
-        onChange={e => { setSearch(e.target.value); setPage(1); }}
-      />
-      <div style={{ margin: "8px 0" }}>
-        עמוד {page} מתוך {pageCount} | מציג {fromIdx}-{toIdx} מתוך {filteredCount} תוצאות (מקסימום {PAGE_SIZE}x4 בעמוד)
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+        <input
+          style={{ fontSize: 12, width: 220, textAlign: 'center' }}
+          placeholder="חפש לפי שם/אמן (3 אותיות ומעלה)"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+        />
+      </div>
+      <div style={{ margin: "8px 0", textAlign: 'center', fontWeight: 500 }}>
+        עמוד {page} מתוך {pageCount} | מציג {fromIdx}-{toIdx} מתוך {filteredCount} תוצאות (מתוך {total})
       </div>
       {/* גריד 4 עמודות, כל עמודה עם כל הכותרות */}
       <div style={{
@@ -182,8 +201,8 @@ export default function AllTracksPage() {
         rowGap: 1,
         marginTop: 12,
         width: '90%',
-        marginLeft: 'auto',
-        marginRight: 'auto'
+        marginLeft: '0px',
+        marginRight: '0px'
       }}>
         {paged.length === 0 ? (
           <div style={{ gridColumn: 'span 4', textAlign: 'center' }}>לא נמצאו תוצאות</div>
@@ -261,9 +280,15 @@ export default function AllTracksPage() {
           ))
         )}
       </div>
-      <div style={{ margin: "8px 0", display: "flex", gap: 8 }}>
+      <div style={{ margin: "8px 0", display: "flex", gap: 8, justifyContent: 'center' }}>
         <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>הקודם</button>
-        <button disabled={page >= pageCount} onClick={() => setPage(p => Math.min(pageCount, p + 1))}>הבא</button>
+        <button
+          disabled={
+            // Disable only if there are no more pages in the full list
+            (page * PAGE_SIZE) >= total
+          }
+          onClick={() => setPage(p => Math.min(page + 1, Math.ceil(total / PAGE_SIZE)))}
+        >הבא</button>
       </div>
     </div>
   );
