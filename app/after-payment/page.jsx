@@ -9,6 +9,7 @@ export default function AfterPaymentPage({ searchParams }) {
     : typeof searchParams?.phone === "string" ? searchParams.phone
     : "";
   const lang = searchParams?.lang === "en" ? "en" : "he";
+  const shift = typeof searchParams?.shift === "string" ? searchParams.shift : "0";
 
-  return <AfterPaymentClient videoId={videoId} errorDescription={errorDescription} phone={phone} title={title} artist={artist} lang={lang} />;
+  return <AfterPaymentClient videoId={videoId} errorDescription={errorDescription} phone={phone} title={title} artist={artist} lang={lang} shift={shift} />;
 }

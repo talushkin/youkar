@@ -46,13 +46,15 @@ const copy = {
   },
 };
 
-export default function AfterPaymentClient({ videoId, errorDescription, phone, title, artist = "", lang: initialLang }) {
+export default function AfterPaymentClient({ videoId, errorDescription, phone, title, artist = "", lang: initialLang, shift }) {
   // Always prefer the lang prop from searchParams (from URL)
   const lang = initialLang === "en" ? "en" : "he";
   // Defensive: force all UI strings to Hebrew if lang is he
   const ui = lang === "he" ? copy.he : copy.en;
 
-  // artist is now available as a prop for display if needed
+
+  // Display shift value if present and not zero
+  const shiftDisplay = shift && shift !== "0" ? (lang === "he" ? `הסטת סולם: ${shift}` : `Key shift: ${shift}`) : null;
 
   const [status, setStatus] = useState({
     type: "pending",
@@ -163,13 +165,16 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const togglePlayPause = () => {
     if (isPlaying) {
       pauseSynced(activeChannel);
-      return;
-    }
-    playSynced(activeChannel);
-  };
-
-  const selectChannel = (source) => {
-    setActiveChannel(source);
+      return (
+        <div dir={ui.dir} style={{ minHeight: "100vh", background: "#0e1f3d", color: "#c8d4ed", padding: 24 }}>
+          <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 8 }}>{ui.thankYou}</h2>
+          <div style={{ marginBottom: 16 }}>{ui.lead}</div>
+          {shiftDisplay && (
+            <div style={{ marginBottom: 16, fontWeight: 600, color: "#ffd700" }}>{shiftDisplay}</div>
+          )}
+          {/* ...rest of UI... */}
+        </div>
+      );
     if (isPlaying) {
       playSynced(source);
     }

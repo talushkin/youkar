@@ -721,18 +721,15 @@ export default function HomePage() {
     pauseCurrent();
     setIsPlaying(false);
     handleExamplePlay(idx, "mix");
+    // If you want the alert logic, uncomment below:
+    // const example = EXAMPLE_SONGS[idx];
+    // const vid = extractVideoId(example.youtube);
+    // const karCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/karaoke.mp3` : "";
+    // const vocCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/vocals.mp3` : "";
+    // alert(
+    //   `Video ID: ${vid}\nTitle: ${example.title}\nKaraoke CDN: ${karCdn}\nVocals CDN: ${vocCdn}`
+    // );
   }
-
-  // Handler for alert on title click in examples
-  const handleExampleTitleClick = (songIndex) => {
-    const example = EXAMPLE_SONGS[songIndex];
-    const vid = extractVideoId(example.youtube);
-    const karCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/karaoke.mp3` : "";
-    const vocCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/vocals.mp3` : "";
-    alert(
-      `Video ID: ${vid}\nTitle: ${example.title}\nKaraoke CDN: ${karCdn}\nVocals CDN: ${vocCdn}`
-    );
-  };
     // ...existing code...
     // In your examples table/list rendering, add:
     // <span onClick={() => handleExampleTitleClick(idx)}>{example.title}</span>
@@ -1288,7 +1285,7 @@ export default function HomePage() {
     setIsCreating(true);
     setStatus({ type: "idle", message: "" });
     // Use sanitized title and artist
-    let waMessage = `✅ Your request was received.\n📞 Phone: 972${normalizedPhone.slice(1)}\n🎵 Title: ${sanitized}\n👤 Artist: ${inputSongArtist}\n⏱️ Duration: ${activeExample?.duration || "Unknown"}\n🔗 YouTube: ${youtubeUrl}\n🎤 We will update you here once karaoke is ready.`;
+    let waMessage = `✅ Your request was received.\n📞 Phone: 972${normalizedPhone.slice(1)}\n🎵 Title: ${sanitized}\n👤 Artist: ${inputSongArtist}\n⏱️ Duration: ${activeExample?.duration || "Unknown"}\n🎹 Key Shift: ${keyShift}\n🔗 YouTube: ${youtubeUrl}\n🎤 We will update you here once karaoke is ready.`;
     let waFailed = false;
     try {
       const waResponse = await fetch("/api/submit-request", {
@@ -1353,7 +1350,7 @@ export default function HomePage() {
       }
       // Redirect to after-payment
       window.location.assign(
-        `${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}`
+        `${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&shift=${encodeURIComponent(keyShift)}`
       );
     } catch (err) {
       setStatus({
@@ -1370,7 +1367,6 @@ export default function HomePage() {
     const handler = (e) => {
       if (e.ctrlKey && e.altKey && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
-        alert('bypassing payment');
         if (typeof bypassPayment === 'function') bypassPayment();
       }
     };
@@ -1380,16 +1376,22 @@ export default function HomePage() {
 
   const submitCreate = async (e) => {
     e.preventDefault();
-    await bypassPayment();
+    // Only call bypassPayment if Shift key is held
+    if (e.shiftKey) {
+      await bypassPayment();
+    } else {
+      // Normal submit logic (if any) goes here
+      // For now, do nothing if Shift is not held
+    }
   };
 
   const returnUrl = queuedVideoId
-    ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(songTitle)}&artist=${encodeURIComponent(inputSongArtist)}`
+    ? `${returnUrlBase}?videoId=${encodeURIComponent(queuedVideoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(songTitle)}&artist=${encodeURIComponent(inputSongArtist)}&shift=${encodeURIComponent(keyShift)}`
     : returnUrlBase;
 
   // Always use sanitized title for payment
   const paymentIframeUrl = queuedVideoId
-    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&artist=${encodeURIComponent(inputSongArtist)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}`
+    ? `/payment?videoId=${encodeURIComponent(queuedVideoId)}&title=${encodeURIComponent(songTitle)}&artist=${encodeURIComponent(inputSongArtist)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}&shift=${encodeURIComponent(keyShift)}`
     : null;
 
   const paymentNavigatedRef = useRef(false);
@@ -1573,25 +1575,46 @@ export default function HomePage() {
             ) : null}
             {/* Key shift dropdown */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <label htmlFor="key-shift" style={{ fontWeight: 500 }}>
-                {keyShiftLabel}
-              </label>
-              <select
-                id="key-shift"
-                value={keyShift}
-                onChange={e => setKeyShift(Number(e.target.value))}
-                style={{ minWidth: 60 }}
-                aria-label={lang === 'he' ? 'הסטת סולם (חצאי טון)' : 'Key shift (semitones)'}
-              >
-                {[...Array(13)].map((_, i) => {
-                  const val = -3 + i * 0.5;
-                  return (
-                    <option key={val} value={val}>
-                      {val > 0 ? `+${val}` : val} {lang === 'he' ? 'חצאי טון' : 'semitones'}
-                    </option>
-                  );
-                })}
-              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginBottom: 8 }}>
+                <span style={{ minWidth: 32, textAlign: 'right', fontWeight: 500, color: '#2196f3' }}>-3</span>
+                <input
+                  type="range"
+                  min={-3}
+                  max={3}
+                  step={0.5}
+                  value={keyShift}
+                  onChange={e => setKeyShift(Number(e.target.value))}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    maxWidth: 180,
+                    background: 'white',
+                    WebkitAppearance: 'none',
+                    height: 4,
+                    borderRadius: 2,
+                    outline: 'none',
+                    boxShadow: 'none',
+                    border: '1px solid #e0e0e0',
+                    margin: 0,
+                    padding: 0
+                  }}
+                  aria-label={lang === 'he' ? 'הסטת סולם (חצאי טון)' : 'Key shift (semitones)'}
+                  className="blue-thumb-slider"
+                />
+                <span style={{ minWidth: 70, textAlign: 'left', fontWeight: 500 }}>
+                  Tone: {keyShift > 0 ? `+${keyShift}` : keyShift} <span style={{ color: '#2196f3', marginLeft: 4 }}>+3</span>
+                </span>
+                {keyShift !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setKeyShift(0)}
+                    style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 4, border: '1px solid #2196f3', background: '#fff', color: '#2196f3', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
+                    aria-label={lang === 'he' ? 'אפס סולם' : 'Reset key shift'}
+                  >
+                    {lang === 'he' ? 'איפוס' : 'Reset'}
+                  </button>
+                )}
+              </div>
             </div>
             {cdnFilesReady && videoId && !queuedVideoId ? (
               <div className="already-karaoke-banner">

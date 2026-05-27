@@ -33,6 +33,7 @@ function PaymentPageContent() {
 
   const queuedVideoId = searchParams.get("videoId") || "";
   const songTitle = searchParams.get("title") || "";
+  const shift = searchParams.get("shift") || "0";
   let paramReturnUrl = searchParams.get("returnUrl");
   if (!paramReturnUrl || paramReturnUrl === "undefined") {
     paramReturnUrl = `${typeof window !== "undefined" ? window.location.origin : "https://youkar.vercel.app"}/after-payment`;
@@ -102,6 +103,7 @@ function PaymentPageContent() {
             <span style={{ color: "#c8d4ed", fontSize: "14px", fontWeight: 600 }}>
               {isHebrew ? "השלמת תשלום" : "Complete Payment"}
               {songTitle ? ` — ${songTitle}` : ""}
+              {shift && shift !== "0" ? ` (Shift: ${shift})` : ""}
             </span>
             {/* Key icon for bypass */}
             <button
@@ -131,6 +133,9 @@ function PaymentPageContent() {
             title={isHebrew ? "תשלום UPay" : "UPay Payment"}
             style={{ flex: 1, width: "100%", border: "none", minHeight: "540px" }}
             allow="payment"
+            onError={() => {
+              alert("Can't load payment page error");
+            }}
           />
         </div>
       </div>
