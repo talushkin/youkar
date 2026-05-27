@@ -18,6 +18,7 @@ export default function KaraokePlayer({
   vocalsUrl,
   selectedTrack = "kar",
   downloadText = "Download",
+  shift = 0,
 }) {
   const [activeChannel, setActiveChannel] = useState("karaoke");
   const [syncSeconds, setSyncSeconds] = useState(0);
@@ -139,8 +140,22 @@ export default function KaraokePlayer({
         <div className="download-row">
           <span className="download-label" aria-hidden="true">🎵</span>
           <div className="download-actions">
-            <audio controls src={karaokeUrl} className="inline-audio" preload="none"></audio>
-            <a href={karaokeUrl} download className="download-btn" target="_blank" rel="noreferrer">
+            {/* Add shift suffix to CDN URLs if needed */}
+            {(() => {
+              const getShiftSuffix = (shift) => {
+                if (!shift || shift === 0 || shift === '0') return '';
+                const abs = Math.abs(Number(shift));
+                const nn = String(abs * 10).replace(/\.0$/, '');
+                return Number(shift) > 0 ? `{#${nn}` : `{_${nn}`;
+              };
+              const karUrlWithShift = karaokeUrl.replace(/karaoke(\{[#_]\d+)?\.mp3$/, `karaoke${getShiftSuffix(shift)}.mp3`);
+              return <>
+                <audio controls src={karUrlWithShift} className="inline-audio" preload="none"></audio>
+                <a href={karUrlWithShift} download className="download-btn" target="_blank" rel="noreferrer">
+                  {downloadText}
+                </a>
+              </>;
+            })()}
               {downloadText}
             </a>
           </div>

@@ -165,19 +165,9 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const togglePlayPause = () => {
     if (isPlaying) {
       pauseSynced(activeChannel);
-      return (
-        <div dir={ui.dir} style={{ minHeight: "100vh", background: "#0e1f3d", color: "#c8d4ed", padding: 24 }}>
-          <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 8 }}>{ui.thankYou}</h2>
-          <div style={{ marginBottom: 16 }}>{ui.lead}</div>
-          {shiftDisplay && (
-            <div style={{ marginBottom: 16, fontWeight: 600, color: "#ffd700" }}>{shiftDisplay}</div>
-          )}
-          {/* ...rest of UI... */}
-        </div>
-      );
-    if (isPlaying) {
-      playSynced(source);
+      return;
     }
+    playSynced(activeChannel);
   };
 
   const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
@@ -384,8 +374,15 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                 const phoneDigits = String(phone).replace(/^0/, '');
                 const waPhone = `972${phoneDigits}`;
                 const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                const karUrl = `${CDN_BASE}/${videoId}/karaoke.mp3`;
-                const vocUrl = `${CDN_BASE}/${videoId}/vocals.mp3`;
+                // Add shift suffix: {#nn for positive, _nn for negative, nn=15 for 1.5}
+                const getShiftSuffix = (shift) => {
+                  if (!shift || shift === '0' || shift === 0) return '';
+                  const abs = Math.abs(Number(shift));
+                  const nn = String(abs * 10).replace(/\.0$/, '');
+                  return Number(shift) > 0 ? `{#${nn}` : `{_${nn}`;
+                };
+                const karUrl = `${CDN_BASE}/${videoId}/karaoke${getShiftSuffix(shift)}.mp3`;
+                const vocUrl = `${CDN_BASE}/${videoId}/vocals${getShiftSuffix(shift)}.mp3`;
                 const shironetUrl = `https://shironet.mako.co.il/search?q=${encodeURIComponent(title)}`;
                 const tab4uUrl = `https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title)}`;
                 const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}`;

@@ -366,6 +366,12 @@ export default function HomePage() {
     voc: ui.colVoc,
   };
 
+  const getShiftSuffix = (shift) => {
+    if (!shift || shift === 0 || shift === '0') return '';
+    const abs = Math.abs(Number(shift));
+    const nn = String(abs * 10).replace(/\.0$/, '');
+    return Number(shift) > 0 ? `{#${nn}` : `{_${nn}`;
+  };
   const activeExample = activeExampleIndex === INPUT_ROW_INDEX
     ? {
       title: inputSongTitle || ui.inputSongFallback,
@@ -651,8 +657,8 @@ export default function HomePage() {
     } else if (karAudioRef.current && vocAudioRef.current) {
       soloSourceRef.current = source;
       setSoloSource(source);
-      karAudioRef.current.src = song.karaoke;
-      vocAudioRef.current.src = song.vocals;
+      karAudioRef.current.src = song.karaoke.replace(/karaoke(\{[#_]\d+)?\.mp3$/, `karaoke${getShiftSuffix(keyShift)}.mp3`);
+      vocAudioRef.current.src = song.vocals.replace(/vocals(\{[#_]\d+)?\.mp3$/, `vocals${getShiftSuffix(keyShift)}.mp3`);
       playSynced(source, 0);
     }
 
@@ -724,8 +730,8 @@ export default function HomePage() {
     // If you want the alert logic, uncomment below:
     // const example = EXAMPLE_SONGS[idx];
     // const vid = extractVideoId(example.youtube);
-    // const karCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/karaoke.mp3` : "";
-    // const vocCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/vocals.mp3` : "";
+    // const karCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/karaoke${getShiftSuffix(keyShift)}.mp3` : "";
+    // const vocCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/vocals${getShiftSuffix(keyShift)}.mp3` : "";
     // alert(
     //   `Video ID: ${vid}\nTitle: ${example.title}\nKaraoke CDN: ${karCdn}\nVocals CDN: ${vocCdn}`
     // );
@@ -1300,6 +1306,7 @@ export default function HomePage() {
           lang,
           title: sanitized,
           artist: inputSongArtist,
+          keyShift,
         }),
       });
       const waData = await waResponse.json();
