@@ -192,27 +192,74 @@ body {
 .source-icon-btn {
   margin-top: 0;
   border-radius: 999px;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1;
   border: 1px solid rgba(16, 40, 72, 0.25);
   background: rgba(255, 255, 255, 0.86);
   color: #102848;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  position: relative;
+}
+
+.source-icon-btn::before,
+.source-icon-btn::after {
+  content: "";
+  position: absolute;
+  display: block;
+  background: currentColor;
+  transition: background-color 0.18s ease;
+}
+
+.source-icon-btn.karaoke-icon::before {
+  left: 11px;
+  top: 8px;
+  width: 8px;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.source-icon-btn.karaoke-icon::after {
+  left: 14px;
+  top: 17px;
+  width: 2px;
+  height: 7px;
+  border-radius: 2px;
+  box-shadow: -3px 6px 0 0 currentColor, 3px 6px 0 0 currentColor;
+}
+
+.source-icon-btn.vocals-icon::before {
+  left: 9px;
+  top: 9px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.source-icon-btn.vocals-icon::after {
+  left: 10px;
+  top: 20px;
+  width: 10px;
+  height: 4px;
+  border-radius: 999px;
 }
 
 .source-icon-btn.is-active.karaoke-icon {
-  background: rgba(44, 183, 255, 0.24);
-  border-color: rgba(44, 183, 255, 0.62);
+  background: #1d6dff;
+  border-color: #1d6dff;
+  color: #fff;
 }
 
 .source-icon-btn.is-active.vocals-icon {
-  background: rgba(44, 183, 255, 0.24);
-  border-color: rgba(44, 183, 255, 0.62);
+  background: #1d6dff;
+  border-color: #1d6dff;
+  color: #fff;
 }
 
 .source-icon-btn.is-active.mix-icon {

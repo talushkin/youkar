@@ -1,8 +1,26 @@
-"use client";
 
+"use client";
 import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+
+  // On mount, fetch actual CDN links for first example and set audio src
+  // useEffect(() => {
+  //   const firstExample = EXAMPLE_SONGS[0];
+  //   const vid = extractVideoId(firstExample.youtube);
+  //   if (!vid) return;
+  //   fetch(`/api/cdn-links?videoId=${encodeURIComponent(vid)}`)
+  //     .then((res) => res.json())
+  //     .then((data) => {
+  //       if (Array.isArray(data?.links)) {
+  //         const kar = data.links.find((l) => l.label.toLowerCase().includes("karaoke"));
+  //         const voc = data.links.find((l) => l.label.toLowerCase().includes("voc"));
+  //         if (kar && karAudioRef.current) karAudioRef.current.src = kar.url;
+  //         if (voc && vocAudioRef.current) vocAudioRef.current.src = voc.url;
+  //       }
+  //     });
+  // }, []);
+// 
 const returnUrlBase =
   (typeof window !== "undefined"
     ? (window.location.hostname === "localhost"
@@ -110,12 +128,19 @@ export default function HomePage() {
     }
   }
   const INPUT_ROW_INDEX = -1;
+  // Key shift state for semitone adjustment
+  const [keyShift, setKeyShift] = useState(0);
+  const [keyShiftLabel, setKeyShiftLabel] = useState('הסטת סולם:');
   const [lang, setLang] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("youkar-lang") || "he";
     }
     return "he";
   });
+
+  useEffect(() => {
+    setKeyShiftLabel(lang === 'he' ? 'הסטת סולם:' : 'Key shift:');
+  }, [lang]);
   const [youtubeUrl, setYoutubeUrl] = useState(() => {
     if (typeof window !== "undefined") {
       const storedLang = localStorage.getItem("youkar-lang") || "he";
@@ -243,6 +268,7 @@ export default function HomePage() {
   const previewIframeRef = useRef(null);
   const previewTimeRef = useRef(0);
   const previewDurationRef = useRef(0);
+  // Download refs for possible future use
   const karAudioRef = useRef(null);
   const vocAudioRef = useRef(null);
   const isSyncingAudioRef = useRef(false);
@@ -610,8 +636,17 @@ export default function HomePage() {
       setSoloSource(null);
       const nextVideoId = extractVideoId(song.youtube);
       autoplayPreview(nextVideoId);
-      karAudioRef.current?.pause();
-      vocAudioRef.current?.pause();
+      // Autoplay kar/voc audio in sync, but muted (vol=0)
+      if (karAudioRef.current && vocAudioRef.current) {
+        karAudioRef.current.src = song.karaoke;
+        vocAudioRef.current.src = song.vocals;
+        karAudioRef.current.currentTime = 0;
+        vocAudioRef.current.currentTime = 0;
+        karAudioRef.current.volume = 0;
+        vocAudioRef.current.volume = 0;
+        karAudioRef.current.play().catch(() => {});
+        vocAudioRef.current.play().catch(() => {});
+      }
       setIsPlaying(true);
     } else if (karAudioRef.current && vocAudioRef.current) {
       soloSourceRef.current = source;
@@ -625,12 +660,12 @@ export default function HomePage() {
   };
 
   const handleExamplePlay = (songIndex, source) => {
-    // Remove toggle: always restart playback from 0:00 for same selection
-    // (no early return)
-
-    // For kar/voc, if switching to the same song but different source, resume from current time
-    if ((source === "kar" || source === "voc") && songIndex === activeExampleIndex) {
-      setActiveSource(source);
+    // Swap kar↔voc on same song without restarting playback.
+    if (
+      songIndex === activeExampleIndex &&
+      (source === "kar" || source === "voc") &&
+      (activeSource === "kar" || activeSource === "voc")
+    ) {
       soloSourceRef.current = source;
       setSoloSource(source);
       applySoloMode();
@@ -639,46 +674,26 @@ export default function HomePage() {
       return;
     }
 
-    // For mix, always mute YT and set up both audio
+    if (source === "kar" || source === "voc") {
+      const nextVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
+      autoplayPreview(nextVideoId, 0, true);
+    }
+
     if (source === "mix") {
-      setPreviewMuted(true);
-      mutePreviewIframe();
-      const isSameMix = songIndex === activeExampleIndex && activeSource === "mix";
-      setActiveExampleIndex(songIndex);
-      setActiveSource("mix");
-      setSoloSource(null);
-      const song = EXAMPLE_SONGS[songIndex];
-      if (karAudioRef.current && vocAudioRef.current && song.karaoke && song.vocals) {
-        karAudioRef.current.src = song.karaoke;
-        vocAudioRef.current.src = song.vocals;
-        karAudioRef.current.muted = false;
-        vocAudioRef.current.muted = false;
-        karAudioRef.current.volume = 1;
-        vocAudioRef.current.volume = 1;
-        // Play both kar and voc together on mix
-        if (!isSameMix) {
-          setTimeout(() => {
-            playSynced("kar", 0);
-            playSynced("voc", 0);
-          }, 0);
-        } else {
-          setTimeout(() => {
-            playSynced("kar");
-            playSynced("voc");
-          }, 0);
-        }
-      }
-      const mixVideoId = extractVideoId(song.youtube);
-      const currentYtId = ytPlayerRef.current?.getVideoData?.()?.video_id;
-      if (isSameMix && currentYtId && mixVideoId && currentYtId === mixVideoId) {
-        // Resume YT from current time, do not reload
-        ensureMixPlayback();
-        setIsPlaying(true);
+      const isSameMixSelection =
+        songIndex === activeExampleIndex && activeSource === "mix";
+
+      if (isSameMixSelection) {
+        togglePlayPause();
         return;
       }
-      if (!isSameMix) {
-        autoplayPreview(mixVideoId);
-      }
+
+      unmutePreviewIframe();
+      pauseCurrent();
+      setActiveExampleIndex(songIndex);
+      setActiveSource("mix");
+      const mixVideoId = extractVideoId(EXAMPLE_SONGS[songIndex]?.youtube);
+      autoplayPreview(mixVideoId);
       return;
     }
 
@@ -708,6 +723,20 @@ export default function HomePage() {
     handleExamplePlay(idx, "mix");
   }
 
+  // Handler for alert on title click in examples
+  const handleExampleTitleClick = (songIndex) => {
+    const example = EXAMPLE_SONGS[songIndex];
+    const vid = extractVideoId(example.youtube);
+    const karCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/karaoke.mp3` : "";
+    const vocCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/vocals.mp3` : "";
+    alert(
+      `Video ID: ${vid}\nTitle: ${example.title}\nKaraoke CDN: ${karCdn}\nVocals CDN: ${vocCdn}`
+    );
+  };
+    // ...existing code...
+    // In your examples table/list rendering, add:
+    // <span onClick={() => handleExampleTitleClick(idx)}>{example.title}</span>
+    // ...existing code...
   useEffect(() => {
     if (!window.YT || !window.YT.Player || ytPlayerRef.current || !ytHostRef.current) {
       return;
@@ -760,15 +789,15 @@ export default function HomePage() {
 
   useEffect(() => {
     const tick = window.setInterval(() => {
-      if (ytPlayerRef.current?.getCurrentTime) {
-        const t = Number(ytPlayerRef.current.getCurrentTime());
-        const d = Number(ytPlayerRef.current.getDuration?.());
-        if (Number.isFinite(d) && d > 0) {
-          updateSyncDuration(d);
+      if (activeSource === "mix") {
+        // For YT, only update duration, not position
+        if (ytPlayerRef.current?.getDuration) {
+          const d = Number(ytPlayerRef.current.getDuration());
+          if (Number.isFinite(d) && d > 0) {
+            updateSyncDuration(d);
+          }
         }
-        if (Number.isFinite(t)) {
-          updateSyncPosition(t);
-        }
+        // Do NOT updateSyncPosition with YT time here
       } else {
         const primaryAudio = activeSource === "voc" ? vocAudioRef.current : karAudioRef.current;
         if (primaryAudio) {
@@ -777,7 +806,6 @@ export default function HomePage() {
           if (Number.isFinite(primaryAudio.duration) && primaryAudio.duration > 0) {
             updateSyncDuration(primaryAudio.duration);
           }
-          // YT time sync is handled only on play/pause/seek events, not here
         } else {
           updateSyncPosition(sharedTimeRef.current);
         }
@@ -888,7 +916,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!videoId) {
-      setPreviewVideoId("");
+      const defaultExampleVideoId = extractVideoId(EXAMPLE_SONGS[0]?.youtube || "");
+      setPreviewVideoId(defaultExampleVideoId || "");
       setInputSongTitle("");
       setInputSongArtist("");
       setInputSongDuration("");
@@ -1028,7 +1057,7 @@ export default function HomePage() {
         }
       }
     };
-
+// console.log("loaded", kar, voc);
     loadLinks();
 
     return () => {
@@ -1071,6 +1100,15 @@ export default function HomePage() {
     }
 
     const sourceToPlay = source;
+
+    // Set volumes according to selected source
+    if (sourceToPlay === "mix") {
+      if (karAudioRef.current) karAudioRef.current.volume = 0;
+      if (vocAudioRef.current) vocAudioRef.current.volume = 0;
+    } else {
+      if (karAudioRef.current) karAudioRef.current.volume = 1;
+      if (vocAudioRef.current) vocAudioRef.current.volume = 1;
+    }
 
     if (source === "kar" || source === "voc") {
       autoplayPreview(videoId, 0, true);
@@ -1133,6 +1171,8 @@ export default function HomePage() {
       setPreviewMuted(false);
       setActiveSource("mix");
       pauseCurrent();
+      setPreviewVideoId(nextVideoId);
+      setPreviewNonce((n) => n + 1);
     }
     setShowSongDropdown(false);
     setSongSearchResults([]);
@@ -1163,13 +1203,23 @@ export default function HomePage() {
 
   const selectSyncChannel = (source) => {
     if (source !== "kar" && source !== "voc") return;
-    const t = readCurrentTime();
+    // If coming from mix, use YT time; otherwise, use audio time
+    let t = 0;
+    if (activeSource === "mix" && ytPlayerRef.current?.getCurrentTime) {
+      t = Number(ytPlayerRef.current.getCurrentTime()) || 0;
+    } else {
+      t = readCurrentTime();
+    }
     const shouldKeepPlaying = isPlaying;
     const nextSolo = soloSource === source ? null : source;
     soloSourceRef.current = nextSolo;
     setSoloSource(nextSolo);
     setActiveSource(source);
     mutePreviewIframe();
+
+    // Restore volumes when switching to kar/voc
+    if (karAudioRef.current) karAudioRef.current.volume = 1;
+    if (vocAudioRef.current) vocAudioRef.current.volume = 1;
 
     if (karAudioRef.current) karAudioRef.current.currentTime = t;
     if (vocAudioRef.current) vocAudioRef.current.currentTime = t;
@@ -1196,6 +1246,9 @@ export default function HomePage() {
       }
     }
     applySoloMode();
+    // Mute karaoke and vocals audio when mix (YouTube) is selected
+    if (karAudioRef.current) karAudioRef.current.volume = 0;
+    if (vocAudioRef.current) vocAudioRef.current.volume = 0;
   };
 
   const togglePlayPause = () => {
@@ -1279,6 +1332,7 @@ export default function HomePage() {
             meta: {
               fromPhone: `972${normalizedPhone.slice(1)}`,
               userLang: lang === "he" ? "HE" : "EN",
+              ...(keyShift !== 0 ? { keyShift } : {}),
             },
           },
         ]),
@@ -1349,6 +1403,7 @@ export default function HomePage() {
   return (
     <main className="page-bg">
       <section className={`card ${lang === "he" ? "lang-he" : "lang-en"}`}>
+
         <Script
           src="https://www.youtube.com/iframe_api"
           strategy="afterInteractive"
@@ -1510,12 +1565,34 @@ export default function HomePage() {
             <p className="field-hint error">{ui.phoneInvalid}</p>
           ) : null}
 
-          <div className={`create-cta-wrap ${showCreateHint ? "is-aimed" : ""}`}>
+          <div className={`create-cta-wrap ${showCreateHint ? "is-aimed" : ""}`}> 
             {showCreateHint ? (
               <p className="create-cta-hint" aria-live="polite">
                 -&gt; {ui.create}
               </p>
             ) : null}
+            {/* Key shift dropdown */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <label htmlFor="key-shift" style={{ fontWeight: 500 }}>
+                {keyShiftLabel}
+              </label>
+              <select
+                id="key-shift"
+                value={keyShift}
+                onChange={e => setKeyShift(Number(e.target.value))}
+                style={{ minWidth: 60 }}
+                aria-label={lang === 'he' ? 'הסטת סולם (חצאי טון)' : 'Key shift (semitones)'}
+              >
+                {[...Array(13)].map((_, i) => {
+                  const val = -3 + i * 0.5;
+                  return (
+                    <option key={val} value={val}>
+                      {val > 0 ? `+${val}` : val} {lang === 'he' ? 'חצאי טון' : 'semitones'}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
             {cdnFilesReady && videoId && !queuedVideoId ? (
               <div className="already-karaoke-banner">
                 <p className="already-karaoke-msg">✅ {ui.alreadyHasKaraoke}</p>
@@ -1575,134 +1652,25 @@ export default function HomePage() {
               allowFullScreen
             />
 
-            {/*
-              Show sync-controls only for examples (not direct YT input dropdown selection).
-              Show when:
-                - activeExampleIndex >= 0 (examples)
-              Hide when:
-                - activeExampleIndex === INPUT_ROW_INDEX (direct YT input row)
-            */}
-            {activeExampleIndex >= 0 && (
-              <div className="sync-controls" dir="ltr">
+            <div className="sync-controls" dir="ltr">
               <div className="sync-source-icons" role="group" aria-label="Audio channels">
                 <button
                   type="button"
-                  className={`source-icon-btn mix-icon${soloSource === null ? " is-active mix-icon" : " mix-icon"}`}
+                  className={`source-icon-btn mix-icon ${soloSource === null ? "is-active" : ""}`}
                   onClick={selectMixChannel}
                   aria-label={ui.colMix}
                   title={ui.colMix}
                 >
-                  <i className="icon ion-ios-volume-high" aria-hidden="true"></i>
-                </button>
-                <button
-                  type="button"
-                  className={`source-icon-btn karaoke-icon${soloSource === "kar" ? " is-active karaoke-icon" : " karaoke-icon"}`}
-                  onClick={() => selectSyncChannel("kar")}
-                  aria-label={ui.colKar}
-                  title={ui.colKar}
-                >
-                  <i className="icon ion-ios-mic" aria-hidden="true"></i>
-                </button>
-                <button
-                  type="button"
-                  className={`source-icon-btn vocals-icon${soloSource === "voc" ? " is-active vocals-icon" : " vocals-icon"}`}
-                  onClick={() => selectSyncChannel("voc")}
-                  aria-label={ui.colVoc}
-                  title={ui.colVoc}
-                >
-                  <i className="icon ion-ios-headset" aria-hidden="true"></i>
+                  🔊
                 </button>
               </div>
-                <button
-                  type="button"
-                  className="sync-play-btn"
-                  onClick={() => {
-                    // Only for examples and MIX
-                    if (activeSource === 'mix' && activeExampleIndex >= 0 && karAudioRef.current && vocAudioRef.current) {
-                      // Mute YT iframe
-                      setPreviewMuted(true);
-                      if (previewIframeRef.current?.contentWindow) {
-                        previewIframeRef.current.contentWindow.postMessage(
-                          JSON.stringify({ event: "command", func: "mute", args: [] }),
-                          "*"
-                        );
-                        previewIframeRef.current.contentWindow.postMessage(
-                          JSON.stringify({ event: "command", func: "setVolume", args: [0] }),
-                          "*"
-                        );
-                      }
-                      karAudioRef.current.muted = false;
-                      vocAudioRef.current.muted = false;
-                      karAudioRef.current.volume = 1;
-                      vocAudioRef.current.volume = 1;
-                      let ytTime = 0;
-                      let ytWasPlaying = false;
-                      let isSameVid = false;
-                      let bothAudiosPlaying = false;
-                      if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function' && typeof ytPlayerRef.current.getCurrentTime === 'function') {
-                        const state = ytPlayerRef.current.getPlayerState();
-                        // 1 = playing
-                        if (state === 1) {
-                          ytTime = ytPlayerRef.current.getCurrentTime() || 0;
-                          ytWasPlaying = true;
-                          // Check if current YT video matches previewVideoId
-                          const ytData = ytPlayerRef.current.getVideoData?.();
-                          if (ytData && ytData.video_id && ytData.video_id === currentPreviewVideoId) {
-                            isSameVid = true;
-                          }
-                        }
-                      }
-                      // Check if both audios are playing
-                      if (!karAudioRef.current.paused && !vocAudioRef.current.paused) {
-                        bothAudiosPlaying = true;
-                      }
-                      // If already playing same video and both audios, do nothing
-                      if (ytWasPlaying && isSameVid && bothAudiosPlaying) {
-                        return;
-                      }
-                      const startAudios = (startTime) => {
-                        playSynced('kar', startTime);
-                        playSynced('voc', startTime);
-                        setIsPlaying(true);
-                      };
-                      // Helper to poll for YT playing state
-                      const waitForYTAndStart = () => {
-                        if (
-                          ytPlayerRef.current &&
-                          typeof ytPlayerRef.current.getPlayerState === 'function' &&
-                          typeof ytPlayerRef.current.getCurrentTime === 'function'
-                        ) {
-                          const state = ytPlayerRef.current.getPlayerState();
-                          if (state === 1) {
-                            const ytNow = ytPlayerRef.current.getCurrentTime() || 0;
-                            startAudios(ytNow);
-                            return;
-                          }
-                        }
-                        setTimeout(waitForYTAndStart, 80);
-                      };
-                      // Only call playVideo if YT is not already playing the correct video
-                      let shouldStartYT = false;
-                      if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function' && typeof ytPlayerRef.current.getVideoData === 'function') {
-                        const state = ytPlayerRef.current.getPlayerState();
-                        const ytData = ytPlayerRef.current.getVideoData();
-                        if (!(state === 1 && ytData && ytData.video_id === currentPreviewVideoId)) {
-                          shouldStartYT = true;
-                        }
-                      }
-                      if (shouldStartYT && ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
-                        ytPlayerRef.current.playVideo();
-                        waitForYTAndStart();
-                      } else {
-                        startAudios(ytTime);
-                      }
-                    } else {
-                      togglePlayPause();
-                    }
-                  }}
-                >
-                  {isPlaying ? ui.pause : ui.play}
-                </button>
+              <button
+                type="button"
+                className="sync-play-btn"
+                onClick={togglePlayPause}
+              >
+                {isPlaying ? ui.pause : ui.play}
+              </button>
               <input
                 className="sync-slider"
                 type="range"
@@ -1714,62 +1682,77 @@ export default function HomePage() {
                 aria-label={ui.syncTime}
               />
               <p className="sync-time">{syncClock}</p>
-              </div>
-            )}
+            </div>
 
-            {/* Only show audio elements if not direct YT input (dropdown) */}
-            {activeExampleIndex >= 0 && (
-              <div className="download-links hidden-main-audio-players">
-                <div className="download-row">
-                  <span className="download-label">🎵 {ui.colKar}</span>
-                  <div className="download-actions">
-                    <audio
-                      ref={karAudioRef}
-                      controls
-                      src={activeExample?.karaoke || ""}
-                      className="inline-audio"
-                      preload="none"
-                      onPlay={() => playSynced("kar")}
-                      onPause={() => pauseSynced()}
-                      onSeeking={() => seekSynced("kar")}
-                      onTimeUpdate={() => onAudioTimeUpdate("kar")}
-                      onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
-                      onRateChange={() => {
-                        if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
-                          vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
-                      }}
-                      onEnded={() => pauseSynced()}
-                    />
-                  </div>
-                </div>
-
-                <div className="download-row">
-                  <span className="download-label">🎤 {ui.colVoc}</span>
-                  <div className="download-actions">
-                    <audio
-                      ref={vocAudioRef}
-                      controls
-                      src={activeExample?.vocals || ""}
-                      className="inline-audio"
-                      preload="none"
-                      onPlay={() => playSynced("voc")}
-                      onPause={() => pauseSynced()}
-                      onSeeking={() => seekSynced("voc")}
-                      onTimeUpdate={() => onAudioTimeUpdate("voc")}
-                      onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
-                      onRateChange={() => {
-                        if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
-                          karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
-                      }}
-                      onEnded={() => pauseSynced()}
-                    />
-                  </div>
+            <div className="download-links hidden-main-audio-players">
+              <div className="download-row">
+                <span className="download-label">🎵 {ui.colKar}</span>
+                <div className="download-actions">
+                  <audio
+                    ref={karAudioRef}
+                    controls
+                    src={activeExample?.karaoke || ""}
+                    className="inline-audio"
+                    preload="none"
+                    onPlay={() => playSynced("kar")}
+                    onPause={() => pauseSynced()}
+                    onSeeking={() => seekSynced("kar")}
+                    onTimeUpdate={() => onAudioTimeUpdate("kar")}
+                    onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
+                    onRateChange={() => {
+                      if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
+                        vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
+                    }}
+                    onEnded={() => pauseSynced()}
+                  />
                 </div>
               </div>
-            )}
+
+              <div className="download-row">
+                <span className="download-label">🎤 {ui.colVoc}</span>
+                <div className="download-actions">
+                  <audio
+                    ref={vocAudioRef}
+                    controls
+                    src={activeExample?.vocals || ""}
+                    className="inline-audio"
+                    preload="none"
+                    onPlay={() => playSynced("voc")}
+                    onPause={() => pauseSynced()}
+                    onSeeking={() => seekSynced("voc")}
+                    onTimeUpdate={() => onAudioTimeUpdate("voc")}
+                    onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
+                    onRateChange={() => {
+                      if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
+                        karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
+                    }}
+                    onEnded={() => pauseSynced()}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
-
+                <div className="download-links" style={{ marginBottom: 24 }}>
+          <div className="download-row">
+            <span className="download-label" aria-hidden="true">🎵</span>
+            <div className="download-actions">
+              <audio controls src={inputKarUrl} className="inline-audio" preload="none" ref={karAudioRef}></audio>
+              <a href={inputKarUrl} download className="download-btn" target="_blank" rel="noreferrer">
+                {lang === "he" ? "הורד" : "Download"}
+              </a>
+            </div>
+          </div>
+          <div className="download-row">
+            <span className="download-label" aria-hidden="true">🎤</span>
+            <div className="download-actions">
+              <audio controls src={inputVocUrl} className="inline-audio" preload="none" ref={vocAudioRef}></audio>
+              <a href={inputVocUrl} download className="download-btn" target="_blank" rel="noreferrer">
+                {lang === "he" ? "הורד" : "Download"}
+              </a>
+            </div>
+          </div>
+        </div>
         <div className="examples-panel">
           <h2>{ui.examplesTitle}</h2>
           <div className="examples-table-wrap">
@@ -1807,33 +1790,71 @@ export default function HomePage() {
                       </button>
                     </td>
                     <td>
-                      <span className="examples-cell-muted">-</span>
+                      {inputKarUrl ? (
+                        <button
+                          type="button"
+                          className={`mini-btn karaoke-btn ${
+                            activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"
+                              ? "is-active"
+                              : ""
+                          }`}
+                          onClick={() => handleInputRowPlay("kar")}
+                          aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "kar"}
+                          title="Play input karaoke instrumental"
+                        >
+                          {ui.colKar}
+                        </button>
+                      ) : (
+                        <span className="examples-cell-muted">-</span>
+                      )}
                     </td>
                     <td>
-                      <span className="examples-cell-muted">-</span>
+                      {inputVocUrl ? (
+                        <button
+                          type="button"
+                          className={`mini-btn vocals-btn ${
+                            activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"
+                              ? "is-active"
+                              : ""
+                          }`}
+                          onClick={() => handleInputRowPlay("voc")}
+                          aria-pressed={activeExampleIndex === INPUT_ROW_INDEX && activeSource === "voc"}
+                          title="Play input vocals only"
+                        >
+                          {ui.colVoc}
+                        </button>
+                      ) : (
+                        <span className="examples-cell-muted">-</span>
+                      )}
                     </td>
                   </tr>
                 ) : null}
                 {EXAMPLE_SONGS.map((song, idx) => (
-                    <tr
-                      key={song.youtube}
-                      className={idx === activeExampleIndex ? "is-active-row" : ""}
-                    >
+                  <tr
+                    key={song.youtube}
+                    className={idx === activeExampleIndex ? "is-active-row" : ""}
+                  >
                     <td>
-                      <span
-                        className="example-title-line"
-                        style={{ display: "inline-block", padding: "4px 0", cursor: "default" }}
+                      <button
+                        type="button"
+                        className="mini-btn yt-btn"
+                        onClick={() => handleExamplePlay(idx, "mix")}
+                        title="Play YouTube mix (original track)"
                       >
                         {song.title}
-                      </span>
+                      </button>
                     </td>
 
                     <td>
                       <button
                         type="button"
-                        className={`mini-btn yt-btn ${idx === activeExampleIndex && activeSource === "mix" ? "is-active" : ""}`}
-                        onClick={() => selectMixChannel(idx)}
-                        aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
+                          className={`mini-btn yt-btn ${
+                            idx === activeExampleIndex && activeSource === "mix"
+                              ? "is-active"
+                              : ""
+                          }`}
+                        onClick={() => handleExamplePlay(idx, "mix")}
+                          aria-pressed={idx === activeExampleIndex && activeSource === "mix"}
                         title="Play YouTube mix (original track)"
                       >
                         {ui.colMix}
@@ -1842,13 +1863,13 @@ export default function HomePage() {
                     <td>
                       <button
                         type="button"
-                          className={`mini-btn karaoke-btn ${
-                            idx === activeExampleIndex && activeSource === "kar"
-                              ? "is-active"
-                              : ""
-                          }`}
+                        className={`mini-btn karaoke-btn ${
+                          idx === activeExampleIndex && activeSource === "kar"
+                            ? "is-active"
+                            : ""
+                        }`}
                         onClick={() => handleExamplePlay(idx, "kar")}
-                          aria-pressed={idx === activeExampleIndex && activeSource === "kar"}
+                        aria-pressed={idx === activeExampleIndex && activeSource === "kar"}
                         title="Play karaoke instrumental"
                       >
                         {ui.colKar}
@@ -1857,13 +1878,13 @@ export default function HomePage() {
                     <td>
                       <button
                         type="button"
-                          className={`mini-btn vocals-btn ${
-                            idx === activeExampleIndex && activeSource === "voc"
-                              ? "is-active"
-                              : ""
-                          }`}
+                        className={`mini-btn vocals-btn ${
+                          idx === activeExampleIndex && activeSource === "voc"
+                            ? "is-active"
+                            : ""
+                        }`}
                         onClick={() => handleExamplePlay(idx, "voc")}
-                          aria-pressed={idx === activeExampleIndex && activeSource === "voc"}
+                        aria-pressed={idx === activeExampleIndex && activeSource === "voc"}
                         title="Play vocals only"
                       >
                         {ui.colVoc}

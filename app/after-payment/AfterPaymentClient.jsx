@@ -170,7 +170,9 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
 
   const selectChannel = (source) => {
     setActiveChannel(source);
-    playSynced(source);
+    if (isPlaying) {
+      playSynced(source);
+    }
   };
 
   const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
@@ -458,18 +460,14 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                   onClick={() => selectChannel("karaoke")}
                   aria-label="Karaoke"
                   title="Karaoke"
-                >
-                  🎵
-                </button>
+                />
                 <button
                   type="button"
                   className={`source-icon-btn vocals-icon ${activeChannel === "vocals" ? "is-active" : ""}`}
                   onClick={() => selectChannel("vocals")}
                   aria-label="Vocals"
                   title="Vocals"
-                >
-                  🎤
-                </button>
+                />
               </div>
               <button type="button" className="sync-play-btn" onClick={togglePlayPause}>
                 {isPlaying ? "Pause" : "Play"}
