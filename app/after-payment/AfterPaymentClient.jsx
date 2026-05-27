@@ -350,8 +350,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   return (
     <main className="page-bg" dir={ui.dir}>
       <section className="card after-payment-card" dir={ui.dir}>
+
         <h1 className="thank-you-title">{ui.thankYou}</h1>
         <p className="lead">{ui.lead}</p>
+        {shiftDisplay && (
+          <div style={{ fontWeight: 600, fontSize: 18, margin: '0.5rem 0', color: '#2d7a2d', textAlign: 'center' }}>{shiftDisplay}</div>
+        )}
 
         {videoId && (
           <div className="yt-embed-wrap">

@@ -1343,6 +1343,7 @@ export default function HomePage() {
       });
       const data = await response.json();
       if (!response.ok) {
+        alert(`Error posting to queue: ${data.error || "Unknown error"}\nTitle: ${sanitized}\nShift: ${keyShift}`);
         throw new Error(data.error || "Failed to create karaoke request");
       }
       setIsInPendingQueue(true);
