@@ -24,6 +24,7 @@ Open http://localhost:3000
 Copy `.env.example` to `.env.local` and set:
 
 - `NEXT_PUBLIC_RETURN_URL` (example: `https://youkar.vercel.app/after-payment`)
+- `YOUTUBE_API_KEY` (optional, enables direct YouTube search in `POST /api/youtube/get-song-list`)
 - `BACKEND_BASE_URL` (example: `https://be-tan-theta.vercel.app`)
 - `BACKEND_CDN_PATH` (default: `/api/cdn-links`)
 - `BACKEND_SUBMIT_PATH` (default: `/api/wa/{phone}`)

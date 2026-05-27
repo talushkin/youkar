@@ -91,6 +91,96 @@ function normalizeSongs(payload) {
   });
 }
 
+async function fetchYoutubeSongsDirect({ title, artist, genre }) {
+  const apiKey = String(process.env.YOUTUBE_API_KEY || "").trim();
+  if (!apiKey) {
+    return [];
+  }
+
+  const query = [title, artist, genre].map((value) => String(value || "").trim()).filter(Boolean).join(" ");
+  if (!query) {
+    return [];
+  }
+
+  const searchParams = new URLSearchParams({
+    key: apiKey,
+    part: "snippet",
+    type: "video",
+    maxResults: "10",
+    q: query,
+  });
+
+  const searchResponse = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?${searchParams.toString()}`,
+    { cache: "no-store" }
+  );
+
+  if (!searchResponse.ok) {
+    throw new Error(`YouTube search failed: ${searchResponse.status} ${searchResponse.statusText}`);
+  }
+
+  const searchBody = await searchResponse.json();
+  const items = Array.isArray(searchBody?.items) ? searchBody.items : [];
+  const ids = items
+    .map((item) => String(item?.id?.videoId || "").trim())
+    .filter(Boolean);
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const detailsParams = new URLSearchParams({
+    key: apiKey,
+    part: "contentDetails",
+    id: ids.join(","),
+  });
+
+  const detailsResponse = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?${detailsParams.toString()}`,
+    { cache: "no-store" }
+  );
+
+  if (!detailsResponse.ok) {
+    throw new Error(`YouTube details failed: ${detailsResponse.status} ${detailsResponse.statusText}`);
+  }
+
+  const detailsBody = await detailsResponse.json();
+  const durationById = new Map(
+    (Array.isArray(detailsBody?.items) ? detailsBody.items : []).map((item) => [
+      String(item?.id || ""),
+      String(item?.contentDetails?.duration || ""),
+    ])
+  );
+
+  const songs = items
+    .map((item, index) => {
+      const videoId = String(item?.id?.videoId || "").trim();
+      const titleValue = String(item?.snippet?.title || "").trim();
+      if (!videoId || !titleValue) {
+        return null;
+      }
+
+      return {
+        id: String(videoId || index),
+        title: titleValue,
+        artist: String(item?.snippet?.channelTitle || "").trim(),
+        duration: durationById.get(videoId) || "",
+        youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      };
+    })
+    .filter(Boolean);
+
+  return normalizeSongs(songs)
+    .sort((a, b) => {
+      const aDuration = parseDurationToSeconds(a.duration);
+      const bDuration = parseDurationToSeconds(b.duration);
+      const aRank = aDuration === null ? Number.POSITIVE_INFINITY : aDuration;
+      const bRank = bDuration === null ? Number.POSITIVE_INFINITY : bDuration;
+      return aRank - bRank;
+    })
+    .slice(0, 5);
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -100,6 +190,21 @@ export async function POST(request) {
 
     if (title.length < 3) {
       return NextResponse.json({ songs: [] });
+    }
+
+    try {
+      const songs = await fetchYoutubeSongsDirect({ title, artist, genre });
+      if (songs.length > 0) {
+        return NextResponse.json({
+          ok: true,
+          songs,
+          payload: { title, artist, genre },
+          source: "youtube-data-api",
+          backend: null,
+        });
+      }
+    } catch {
+      // If direct YouTube search fails, fall back to the existing backend service.
     }
 
     const apiBase = process.env.BACKEND_BASE_URL || "https://be-tan-theta.vercel.app";
@@ -146,7 +251,7 @@ export async function POST(request) {
         return aRank - bRank;
       })
       .slice(0, 5);
-    return NextResponse.json({ ok: true, songs, payload, backend: backendBody });
+    return NextResponse.json({ ok: true, songs, payload, source: "backend", backend: backendBody });
   } catch (error) {
     return NextResponse.json(
       {
