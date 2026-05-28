@@ -79,6 +79,7 @@ export async function GET(request) {
     const result = await response.json();
     const contents = Array.isArray(result?.contents) ? result.contents : [];
 
+
     const karaokeKey = `${prefix}karaoke.mp3`;
     const vocalsKey = `${prefix}vocals.mp3`;
     const metaKey = `${prefix}meta.json`;
@@ -86,6 +87,40 @@ export async function GET(request) {
     const hasKaraoke = contents.some((item) => String(item?.Key || "") === karaokeKey);
     const hasVocals = contents.some((item) => String(item?.Key || "") === vocalsKey);
     const hasMeta = contents.some((item) => String(item?.Key || "") === metaKey);
+
+    // Detect all available key shift versions for karaoke and vocals
+    // Match files like karaoke.mp3, karaoke#10.mp3, karaoke_10.mp3, vocals#-10.mp3, etc.
+    const shiftRegex = /^(karaoke|vocals)([#_])(-?\d+)\.mp3$/i;
+    const shiftVersions = { original: { karaoke: null, vocals: null }, shifts: [] };
+    // Always add original
+    shiftVersions.original.karaoke = hasKaraoke ? `${cdnBase}/${encodeURIComponent(videoId)}/karaoke.mp3` : null;
+    shiftVersions.original.vocals = hasVocals ? `${cdnBase}/${encodeURIComponent(videoId)}/vocals.mp3` : null;
+
+    // Find all shifted versions
+    for (const item of contents) {
+      const key = String(item?.Key || "").replace(prefix, "");
+      const match = key.match(shiftRegex);
+      if (match) {
+        const type = match[1];
+        const sep = match[2];
+        const shiftRaw = match[3];
+        // shiftRaw is e.g. 10, -15, etc. Convert to float (divide by 10)
+        const shiftVal = Number(shiftRaw) / 10;
+        // Compose suffix for UI
+        const suffix = `${sep}${shiftRaw}`;
+        // Compose label: +1, -1.5, etc.
+        const label = shiftVal > 0 ? `+${shiftVal}` : `${shiftVal}`;
+        // Find or create entry for this shift
+        let entry = shiftVersions.shifts.find((s) => s.suffix === suffix);
+        if (!entry) {
+          entry = { label, suffix, shift: shiftVal, karaoke: null, vocals: null };
+          shiftVersions.shifts.push(entry);
+        }
+        entry[type] = `${cdnBase}/${encodeURIComponent(videoId)}/${type}${suffix}.mp3`;
+      }
+    }
+    // Sort shifts by shift value ascending
+    shiftVersions.shifts.sort((a, b) => a.shift - b.shift);
 
     const links = [];
     if (hasKaraoke) {
@@ -146,6 +181,7 @@ export async function GET(request) {
       meta: metaInfo,
       requestsCount,
       requests: requestsArray,
+      shiftVersions, // <-- all available key shift versions for UI
       raw: result,
     });
   } catch (error) {

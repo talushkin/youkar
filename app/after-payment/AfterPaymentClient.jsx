@@ -62,6 +62,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   });
   const [karaokeUrl, setKaraokeUrl] = useState("");
   const [vocalsUrl, setVocalsUrl] = useState("");
+  const [shiftVersions, setShiftVersions] = useState(null); // { original, shifts }
+  const [selectedShift, setSelectedShift] = useState("original");
   const [activeChannel, setActiveChannel] = useState("karaoke");
   const [syncSeconds, setSyncSeconds] = useState(0);
   const [syncDuration, setSyncDuration] = useState(0);
@@ -194,6 +196,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     const voc = `${CDN_BASE}/${videoId}/vocals.mp3`;
     setKaraokeUrl(kar);
     setVocalsUrl(voc);
+    setShiftVersions(null);
+    setSelectedShift("original");
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
@@ -247,6 +251,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     let stopped = false;
     let timer = null;
 
+
     const check = async () => {
       try {
         const response = await fetch(`/api/cdn-links?videoId=${encodeURIComponent(videoId)}`);
@@ -256,52 +261,59 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           throw new Error(data.error || "Failed to check file status");
         }
 
-        const receivedLinks = Array.isArray(data.links) ? data.links : [];
-        if (receivedLinks.length > 0) {
-          // Override with actual API links if returned
-          const karLink = receivedLinks.find((l) => {
-            const u = String(l?.url || "").toLowerCase();
-            return u.includes("karaoke") || u.includes("kar");
-          })?.url || kar;
-          const vocLink = receivedLinks.find((l) => {
-            const u = String(l?.url || "").toLowerCase();
-            return u.includes("vocals") || u.includes("voc");
-          })?.url || voc;
-
-          const hasKaraoke = receivedLinks.some((l) => {
-            const u = String(l?.url || "").toLowerCase();
-            return u.includes("karaoke") || u.includes("kar");
-          });
-          const hasVocals = receivedLinks.some((l) => {
-            const u = String(l?.url || "").toLowerCase();
-            return u.includes("vocals") || u.includes("voc");
-          });
-
-          if (hasKaraoke && hasVocals) {
-            setKaraokeUrl(karLink);
-            setVocalsUrl(vocLink);
-            setStatus({ type: "success", message: lang === "he" ? copy.he.ready : copy.en.ready });
-
-            // Send WA notification once (only if phone available)
-            if (phone && !waReadySentRef.current) {
-              waReadySentRef.current = true;
-              const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-              const titleFromLinks = receivedLinks.find((l) => String(l?.title || "").trim())?.title;
-              const waText =
-                `🎤 Your Karaoke & Vocals files are ready!\n\n` +
-                `🎵 Title: ${titleFromLinks || title || `YouTube ${videoId}`}\n` +
-                `▶️ Original song:\n${ytUrl}\n\n` +
-                `🎵 Karaoke (no vocals):\n${karLink}\n\n` +
-                `🎙️ Vocals only:\n${vocLink}`;
-              fetch("/api/wa", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ to: phone, text: waText, title: "Your Karaoke Files" }),
-              }).catch(() => {});
-            }
-            return;
-          }
+        // Store all available shift versions for UI
+        if (data.shiftVersions) {
+          setShiftVersions(data.shiftVersions);
         }
+
+        // Default to original or first available shift
+        let initialShift = "original";
+        if (shift && data.shiftVersions) {
+          // Try to match shift value to a shift version
+          const found = data.shiftVersions.shifts.find(s => String(s.label) === String(shift) || String(s.shift) === String(shift));
+          if (found) initialShift = found.suffix;
+        }
+        setSelectedShift(initialShift);
+
+        // Helper to get URLs for a given shift
+        const getUrlsForShift = (shiftKey) => {
+          if (!data.shiftVersions) return { kar: kar, voc: voc };
+          if (shiftKey === "original") {
+            return {
+              kar: data.shiftVersions.original.karaoke || kar,
+              voc: data.shiftVersions.original.vocals || voc,
+            };
+          }
+          const found = data.shiftVersions.shifts.find(s => s.suffix === shiftKey);
+          return {
+            kar: found?.karaoke || kar,
+            voc: found?.vocals || voc,
+          };
+        };
+
+        // Set URLs for selected shift
+        const { kar: karUrl, voc: vocUrl } = getUrlsForShift(initialShift);
+        setKaraokeUrl(karUrl);
+        setVocalsUrl(vocUrl);
+        setStatus({ type: "success", message: lang === "he" ? copy.he.ready : copy.en.ready });
+
+        // Send WA notification once (only if phone available)
+        if (phone && !waReadySentRef.current) {
+          waReadySentRef.current = true;
+          const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+          const waText =
+            `🎤 Your Karaoke & Vocals files are ready!\n\n` +
+            `🎵 Title: ${title || `YouTube ${videoId}`}\n` +
+            `▶️ Original song:\n${ytUrl}\n\n` +
+            `🎵 Karaoke (no vocals):\n${karUrl}\n\n` +
+            `🎙️ Vocals only:\n${vocUrl}`;
+          fetch("/api/wa", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: phone, text: waText, title: "Your Karaoke Files" }),
+          }).catch(() => {});
+        }
+        return;
 
         if (!stopped) {
           setStatus({
@@ -374,19 +386,24 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           <div style={{ margin: '1.5rem 0', textAlign: 'center' }}>
             <a
               href={(() => {
-                // Build WhatsApp message with ASCII symbols
                 const phoneDigits = String(phone).replace(/^0/, '');
                 const waPhone = `972${phoneDigits}`;
                 const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                // Add shift suffix: {#nn for positive, _nn for negative, nn=15 for 1.5}
-                const getShiftSuffix = (shift) => {
-                  if (!shift || shift === '0' || shift === 0) return '';
-                  const abs = Math.abs(Number(shift));
-                  const nn = String(abs * 10).replace(/\.0$/, '');
-                  return Number(shift) > 0 ? `{#${nn}` : `{_${nn}`;
-                };
-                const karUrl = `${CDN_BASE}/${videoId}/karaoke${getShiftSuffix(shift)}.mp3`;
-                const vocUrl = `${CDN_BASE}/${videoId}/vocals${getShiftSuffix(shift)}.mp3`;
+                // Use selected shift for URLs
+                let karUrl = karaokeUrl;
+                let vocUrl = vocalsUrl;
+                if (shiftVersions) {
+                  if (selectedShift === "original") {
+                    karUrl = shiftVersions.original.karaoke || karUrl;
+                    vocUrl = shiftVersions.original.vocals || vocUrl;
+                  } else {
+                    const found = shiftVersions.shifts.find(s => s.suffix === selectedShift);
+                    if (found) {
+                      karUrl = found.karaoke || karUrl;
+                      vocUrl = found.vocals || vocUrl;
+                    }
+                  }
+                }
                 const shironetUrl = `https://shironet.mako.co.il/search?q=${encodeURIComponent(title)}`;
                 const tab4uUrl = `https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title)}`;
                 const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}`;
@@ -408,6 +425,37 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
             >
               שלח את כל פרטי השיר ב-WhatsApp
             </a>
+          </div>
+        )}
+
+        {/* Key shift version buttons row */}
+        {shiftVersions && (
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, justifyContent: 'center', margin: '0.5rem 0 1rem 0' }}>
+            <button
+              type="button"
+              className={selectedShift === "original" ? "shift-btn is-active" : "shift-btn"}
+              onClick={() => {
+                setSelectedShift("original");
+                setKaraokeUrl(shiftVersions.original.karaoke);
+                setVocalsUrl(shiftVersions.original.vocals);
+              }}
+            >
+              Original
+            </button>
+            {shiftVersions.shifts.map((s) => (
+              <button
+                key={s.suffix}
+                type="button"
+                className={selectedShift === s.suffix ? "shift-btn is-active" : "shift-btn"}
+                onClick={() => {
+                  setSelectedShift(s.suffix);
+                  setKaraokeUrl(s.karaoke);
+                  setVocalsUrl(s.vocals);
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
         )}
         <div className="lyrics-links" style={{ display: 'flex', gap: '3rem', justifyContent: 'center', margin: '1.5rem 0' }}>
