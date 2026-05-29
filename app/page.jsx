@@ -1630,140 +1630,119 @@ export default function HomePage() {
                 <button
                   type="button"
                   className="primary-cta is-highlight"
-                  onClick={() => {
-                    setQueuedVideoId(videoId);
-                    setSongTitle(inputSongTitle || `YouTube ${videoId}`);
-                    setStatus({ type: "success", message: ui.alreadyHasKaraokeAction });
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    // Only call bypassPayment if Shift key is held
+                    if (e.shiftKey) {
+                      await bypassPayment();
+                    } else {
+                      setQueuedVideoId(videoId);
+                      setSongTitle(inputSongTitle || `YouTube ${videoId}`);
+                      setStatus({ type: "success", message: ui.alreadyHasKaraokeAction });
+                      try {
+                        const waResponse = await fetch("/api/submit-request", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            phoneAreaCode,
+                            localNumber: phoneNumber,
+                            phoneNumber: normalizedPhone,
+                            youtubeUrl,
+                            videoId,
+                            lang,
+                            title: sanitized,
+                            artist: inputSongArtist,
+                            keyShift,
+                          }),
+                        });
+                        // ...existing code...
+                        const response = await fetch("/api/pending", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify([
+                            {
+                              videoId,
+                              title: sanitized,
+                              artist: inputSongArtist,
+                              duration: activeExample?.duration || "N/A",
+                              meta: {
+                                fromPhone: `972${normalizedPhone.slice(1)}`,
+                                userLang: lang === "he" ? "HE" : "EN",
+                                ...(keyShift !== 0 ? { keyShift } : {}),
+                              },
+                            },
+                          ]),
+                        });
+                        const data = await response.json();
+                        if (!response.ok) {
+                          alert(`Error posting to queue: ${data.error || "Unknown error"}\nTitle: ${sanitized}\nShift: ${keyShift}`);
+                          throw new Error(data.error || "Failed to create karaoke request");
+                        }
+                        // Immediately redirect to /payment with all required params
+                        const paymentUrl = `/payment?videoId=${encodeURIComponent(data.videoId || videoId)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(`${returnUrlBase}?videoId=${encodeURIComponent(data.videoId || videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&shift=${encodeURIComponent(keyShift)}`)}&lang=${encodeURIComponent(lang)}&shift=${encodeURIComponent(keyShift)}`;
+                        window.location.assign(paymentUrl);
+                      } catch (err) {
+                        setStatus({
+                          type: "error",
+                          message: err.message || "Could not create karaoke request",
+                        });
+                      } finally {
+                        setIsCreating(false);
+                      }
+                    }
                   }}
                 >
-                  {ui.alreadyHasKaraokeAction}
+                  {ui.alreadyHasKaraokeAction || (lang === 'he' ? 'שלח שוב' : 'Send again')}
                 </button>
-              </div>
-            ) : (
-              <>
-                <button
-                  ref={createButtonRef}
-                  type="submit"
-                  disabled={!canCreate || isCreating}
-                  className={canCreate ? "primary-cta create-cta-button is-highlight" : "primary-cta create-cta-button"}
-                >
-                  {isCreating ? ui.creating : ui.create}
-                </button>
-              </>
-            )}
-            {/* Bypass payment button is always present (hidden) for hotkey handler */}
-            <button
-              type="button"
-              disabled={!canCreate || isCreating}
-              className="primary-cta create-cta-button bypass-payment-btn"
-              style={{ display: 'none' }}
-              tabIndex={-1}
-              aria-hidden="true"
-              onClick={bypassPayment}
-            >
-              Bypass Payment
-            </button>
-          </div>
-        </form>
-
-        {paymentIframeUrl ? (
-          <p className="field-hint">{lang === "he" ? "מעביר לעמוד תשלום..." : "Redirecting to payment page..."}</p>
-        ) : null}
-
-        {currentPreviewVideoId ? (
-          <div className="preview-wrap">
-            <p className="preview-label">{ui.clipPreview}</p>
-            <iframe
-              ref={previewIframeRef}
-              key={`${currentPreviewVideoId}-${previewNonce}`}
-              title="YouTube preview"
-              src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&controls=0&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&start=${Math.max(0, Math.floor(previewTimeRef.current || 0))}&mute=${previewMuted ? 1 : 0}&enablejsapi=1`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allowFullScreen
-            />
-
-            <div className="sync-controls" dir="ltr">
-              <div className="sync-source-icons" role="group" aria-label="Audio channels">
-                <button
-                  type="button"
-                  className={`source-icon-btn mix-icon ${soloSource === null ? "is-active" : ""}`}
-                  onClick={selectMixChannel}
-                  aria-label={ui.colMix}
-                  title={ui.colMix}
-                >
-                  🔊
-                </button>
-              </div>
-              <button
-                type="button"
-                className="sync-play-btn"
-                onClick={togglePlayPause}
-              >
-                {isPlaying ? ui.pause : ui.play}
-              </button>
-              <input
-                className="sync-slider"
-                type="range"
-                min="0"
-                max={Math.max(0, syncDuration)}
-                step="0.1"
-                value={Math.min(syncSeconds, Math.max(0, syncDuration))}
-                onChange={onSyncSeek}
-                aria-label={ui.syncTime}
-              />
-              <p className="sync-time">{syncClock}</p>
-            </div>
-
-            <div className="download-links hidden-main-audio-players">
-              <div className="download-row">
-                <span className="download-label">🎵 {ui.colKar}</span>
-                <div className="download-actions">
-                  <audio
-                    ref={karAudioRef}
-                    controls
-                    src={activeExample?.karaoke || ""}
-                    className="inline-audio"
-                    preload="none"
-                    onPlay={() => playSynced("kar")}
-                    onPause={() => pauseSynced()}
-                    onSeeking={() => seekSynced("kar")}
-                    onTimeUpdate={() => onAudioTimeUpdate("kar")}
-                    onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
-                    onRateChange={() => {
-                      if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
-                        vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
-                    }}
-                    onEnded={() => pauseSynced()}
-                  />
+                <div className="download-links hidden-main-audio-players">
+                  <div className="download-row">
+                    <span className="download-label">🎵 {ui.colKar}</span>
+                    <div className="download-actions">
+                      <audio
+                        ref={karAudioRef}
+                        controls
+                        src={activeExample?.karaoke || ""}
+                        className="inline-audio"
+                        preload="none"
+                        onPlay={() => playSynced("kar")}
+                        onPause={() => pauseSynced()}
+                        onSeeking={() => seekSynced("kar")}
+                        onTimeUpdate={() => onAudioTimeUpdate("kar")}
+                        onLoadedMetadata={() => onAudioLoadedMetadata("kar")}
+                        onRateChange={() => {
+                          if (vocAudioRef.current && karAudioRef.current && !isSyncingAudioRef.current)
+                            vocAudioRef.current.playbackRate = karAudioRef.current.playbackRate;
+                        }}
+                        onEnded={() => pauseSynced()}
+                      />
+                    </div>
+                  </div>
+                  <div className="download-row">
+                    <span className="download-label">🎤 {ui.colVoc}</span>
+                    <div className="download-actions">
+                      <audio
+                        ref={vocAudioRef}
+                        controls
+                        src={activeExample?.vocals || ""}
+                        className="inline-audio"
+                        preload="none"
+                        onPlay={() => playSynced("voc")}
+                        onPause={() => pauseSynced()}
+                        onSeeking={() => seekSynced("voc")}
+                        onTimeUpdate={() => onAudioTimeUpdate("voc")}
+                        onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
+                        onRateChange={() => {
+                          if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
+                            karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
+                        }}
+                        onEnded={() => pauseSynced()}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="download-row">
-                <span className="download-label">🎤 {ui.colVoc}</span>
-                <div className="download-actions">
-                  <audio
-                    ref={vocAudioRef}
-                    controls
-                    src={activeExample?.vocals || ""}
-                    className="inline-audio"
-                    preload="none"
-                    onPlay={() => playSynced("voc")}
-                    onPause={() => pauseSynced()}
-                    onSeeking={() => seekSynced("voc")}
-                    onTimeUpdate={() => onAudioTimeUpdate("voc")}
-                    onLoadedMetadata={() => onAudioLoadedMetadata("voc")}
-                    onRateChange={() => {
-                      if (karAudioRef.current && vocAudioRef.current && !isSyncingAudioRef.current)
-                        karAudioRef.current.playbackRate = vocAudioRef.current.playbackRate;
-                    }}
-                    onEnded={() => pauseSynced()}
-                  />
-                </div>
-              </div>
-            </div>
+            ) : null}
           </div>
-        ) : null}
                 <div className="download-links" style={{ marginBottom: 24 }}>
           <div className="download-row">
             <span className="download-label" aria-hidden="true">🎵</span>
@@ -1784,6 +1763,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        </form>
         <div className="examples-panel">
           <h2>{ui.examplesTitle}</h2>
           <div className="examples-table-wrap">

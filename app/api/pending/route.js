@@ -85,6 +85,7 @@ export async function POST(request) {
             kind: incomingMeta.kind || "karaoke-missing",
             fromPhone: incomingMeta.fromPhone ?? null,
             userLang: incomingMeta.userLang ?? null,
+            keyShift: incomingMeta.keyShift ?? null,
           },
         };
       })
@@ -101,9 +102,10 @@ export async function POST(request) {
     const backendHeaders = getBackendHeaders();
     const backendPayload = normalizedEntries;
 
-    console.log("[api/pending][POST] Backend call", {
+    // Log the backend call and payload for debugging
+    console.log("[api/pending][POST] Calling backend to add pending", {
       url: backendUrl,
-      bearer: backendHeaders.Authorization || "",
+      headers: backendHeaders,
       payload: backendPayload,
     });
 
