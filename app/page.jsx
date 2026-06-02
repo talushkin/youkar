@@ -77,8 +77,15 @@ const EXAMPLE_SONGS = [
 ];
 
 function extractVideoId(link) {
+  const raw = String(link || "").trim();
+  if (!raw) return null;
+
+  // Fast-path: plain video id or url embedded in surrounding text.
+  const embeddedMatch = raw.match(/(?:v=|vi=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (embeddedMatch?.[1]) return embeddedMatch[1];
+
   try {
-    const url = new URL(link);
+    const url = new URL(raw);
     if (url.hostname.includes("youtu.be")) {
       // Handles https://youtu.be/VIDEOID and https://youtu.be/VIDEOID?si=...
       const path = url.pathname.replace("/", "");
@@ -175,9 +182,12 @@ export default function HomePage() {
       return;
     }
 
-    setPreviewVideoId(videoId);
-    setPreviewNonce((n) => n + 1);
+    pauseCurrent();
     setActiveSource("mix");
+    setActiveExampleIndex(INPUT_ROW_INDEX);
+    soloSourceRef.current = null;
+    setSoloSource(null);
+    autoplayPreview(videoId, 0, true);
 
     // Always fetch video data from backend and update input
     fetch("/api/youtube/get-video-data", {
@@ -195,19 +205,12 @@ export default function HomePage() {
           setShowSongDropdown(false);
           return;
         }
-        // Debug: Alert video data from backend
-        alert(
-          `Video Data from BE:\nTitle: ${data.title}\nArtist: ${data.artist}\nDuration: ${data.duration}\nImage: ${data.image}\nURL: ${data.url}`
-        );
         // Always set artist from backend response
         const artistFromBE = data.artist || "";
         const sanitized = sanitizeTitle(data.title || "", artistFromBE);
         setInputSongTitle(sanitized);
         setInputSongArtist(artistFromBE);
         setInputSongDuration(data.duration || "");
-        alert(
-          `Sanitized Title: ${sanitized}\nArtist: ${artistFromBE}\nDuration: ${data.duration}`
-        );
         setYoutubeDisplayValue([
           sanitized,
           data.duration,
@@ -426,6 +429,16 @@ export default function HomePage() {
     setTimeout(() => {
       mutePreviewIframe();
     }, 200);
+  };
+
+  const activateVideoPreview = (nextVideoId, muted = true) => {
+    if (!nextVideoId) return;
+    setActiveSource("mix");
+    setActiveExampleIndex(INPUT_ROW_INDEX);
+    soloSourceRef.current = null;
+    setSoloSource(null);
+    pauseCurrent();
+    autoplayPreview(nextVideoId, 0, muted);
   };
 
   const sendPreviewCommand = (func, args = []) => {
@@ -877,11 +890,11 @@ export default function HomePage() {
           const haystack = `${song.title} ${song.artist}`.toLowerCase();
           return haystack.includes(query.toLowerCase());
         })
-        .slice(0, 5);
+        .slice(0, 25);
 
       const fallbackSongs = matchedFallbackSongs.length > 0
         ? matchedFallbackSongs
-        : mappedExamples.slice(0, 5);
+        : mappedExamples.slice(0, 25);
 
       try {
         const response = await fetch("/api/youtube/get-song-list", {
@@ -896,7 +909,7 @@ export default function HomePage() {
           throw new Error(data?.error || "Could not fetch song search list");
         }
 
-        const nextResults = Array.isArray(data?.songs) ? data.songs.slice(0, 5) : [];
+        const nextResults = Array.isArray(data?.songs) ? data.songs.slice(0, 25) : [];
         const finalResults = nextResults.length > 0 ? nextResults : fallbackSongs;
         setSongSearchResults(finalResults);
         setShowSongDropdown(true);
@@ -1170,12 +1183,13 @@ export default function HomePage() {
     setYoutubeUrl(nextUrl);
     setYoutubeDisplayValue(nextDisplay || nextUrl);
     if (nextVideoId) {
-      // For search, only play YT preview, do not enable/play kar/voc
-      setPreviewMuted(false);
+      // For search, only play YT preview; use muted-first autoplay for reliability.
       setActiveSource("mix");
+      setActiveExampleIndex(INPUT_ROW_INDEX);
+      soloSourceRef.current = null;
+      setSoloSource(null);
       pauseCurrent();
-      setPreviewVideoId(nextVideoId);
-      setPreviewNonce((n) => n + 1);
+      autoplayPreview(nextVideoId, 0, true);
     }
     setShowSongDropdown(false);
     setSongSearchResults([]);
@@ -1457,10 +1471,26 @@ export default function HomePage() {
                 setYoutubeDisplayValue("");
                 setYoutubeUrl(nextUrl);
                 if (nextVideoId) {
-                  pauseCurrent();
+                  activateVideoPreview(nextVideoId, true);
                 }
                 setQueuedVideoId("");
                 setStatus({ type: "idle", message: "" });
+              }}
+              onPaste={(e) => {
+                const pasted = e.clipboardData?.getData("text") || "";
+                const cleaned = pasted.trim();
+                if (!cleaned) return;
+
+                e.preventDefault();
+                setYoutubeDisplayValue("");
+                setYoutubeUrl(cleaned);
+                setQueuedVideoId("");
+                setStatus({ type: "idle", message: "" });
+
+                const pastedVideoId = extractVideoId(cleaned);
+                if (pastedVideoId) {
+                  activateVideoPreview(pastedVideoId, true);
+                }
               }}
               required
             />

@@ -53,8 +53,11 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const ui = lang === "he" ? copy.he : copy.en;
 
 
-  // Display shift value if present and not zero
-  const shiftDisplay = shift && shift !== "0" ? (lang === "he" ? `הסטת סולם: ${shift}` : `Key shift: ${shift}`) : null;
+  const shiftNumber = Number(shift);
+  const isZeroShift = !Number.isFinite(shiftNumber) || shiftNumber === 0;
+
+  // Display shift value only when it is a real non-zero number.
+  const shiftDisplay = !isZeroShift ? (lang === "he" ? `הסטת סולם: ${shift}` : `Key shift: ${shift}`) : null;
 
   const [status, setStatus] = useState({
     type: "pending",
@@ -268,7 +271,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
 
         // Default to original or first available shift
         let initialShift = "original";
-        if (shift && data.shiftVersions) {
+        if (!isZeroShift && data.shiftVersions) {
           // Try to match shift value to a shift version
           const found = data.shiftVersions.shifts.find(s => String(s.label) === String(shift) || String(s.shift) === String(shift));
           if (found) initialShift = found.suffix;

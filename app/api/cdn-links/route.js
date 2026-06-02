@@ -106,6 +106,10 @@ export async function GET(request) {
         const shiftRaw = match[3];
         // shiftRaw is e.g. 10, -15, etc. Convert to float (divide by 10)
         const shiftVal = Number(shiftRaw) / 10;
+        // For zero shift, keep the canonical original filename without suffix.
+        if (!Number.isFinite(shiftVal) || shiftVal === 0) {
+          continue;
+        }
         // Compose suffix for UI
         const suffix = `${sep}${shiftRaw}`;
         // Compose label: +1, -1.5, etc.

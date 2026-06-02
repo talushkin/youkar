@@ -106,7 +106,7 @@ async function fetchYoutubeSongsDirect({ title, artist, genre }) {
     key: apiKey,
     part: "snippet",
     type: "video",
-    maxResults: "10",
+    maxResults: "25",
     q: query,
   });
 
@@ -178,7 +178,7 @@ async function fetchYoutubeSongsDirect({ title, artist, genre }) {
       const bRank = bDuration === null ? Number.POSITIVE_INFINITY : bDuration;
       return aRank - bRank;
     })
-    .slice(0, 5);
+    .slice(0, 25);
 }
 
 export async function POST(request) {
@@ -250,7 +250,7 @@ export async function POST(request) {
         const bRank = bDuration === null ? Number.POSITIVE_INFINITY : bDuration;
         return aRank - bRank;
       })
-      .slice(0, 5);
+      .slice(0, 25);
     return NextResponse.json({ ok: true, songs, payload, source: "backend", backend: backendBody });
   } catch (error) {
     return NextResponse.json(
