@@ -71,6 +71,20 @@ function normalizePhoneToWa(rawPhone) {
   return digits;
 }
 
+function findShiftEntry(versions, rawShift) {
+  if (!versions || !Array.isArray(versions.shifts)) return null;
+  const parsed = parseShiftValue(rawShift);
+  if (!parsed) return null;
+
+  const expectedSuffix = getShiftSuffix(parsed);
+  const expectedLabel = parsed > 0 ? `+${parsed}` : `${parsed}`;
+
+  return versions.shifts.find((s) => {
+    const sameNumeric = Number.isFinite(Number(s?.shift)) && Math.abs(Number(s.shift) - parsed) < 0.00001;
+    return s?.suffix === expectedSuffix || String(s?.label) === expectedLabel || sameNumeric;
+  }) || null;
+}
+
 export default function AfterPaymentClient({ videoId, errorDescription, phone, title, artist = "", lang: initialLang, shift }) {
   // Always prefer the lang prop from searchParams (from URL)
   const lang = initialLang === "en" ? "en" : "he";
@@ -367,9 +381,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         // Default to original or first available shift
         let initialShift = "original";
         if (!isZeroShift && data.shiftVersions) {
-          // Try to match shift value to a shift version
-          const found = data.shiftVersions.shifts.find(s => String(s.label) === String(shift) || String(s.shift) === String(shift));
-          if (found) initialShift = found.suffix;
+          const found = findShiftEntry(data.shiftVersions, parsedShift);
+          if (found?.suffix) initialShift = found.suffix;
         }
         setSelectedShift(initialShift);
 
@@ -402,9 +415,13 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           const titleFromLinks = Array.isArray(data.links)
             ? data.links.find((l) => String(l?.title || "").trim())?.title
             : null;
+          const shiftLine = !isZeroShift
+            ? `🎹 Shift: ${parsedShift > 0 ? `+${parsedShift}` : parsedShift}\n`
+            : "";
           const waText =
             `🎤 Your Karaoke & Vocals files are ready!\n\n` +
             `🎵 Title: ${titleFromLinks || title || `YouTube ${videoId}`}\n` +
+            shiftLine +
             `▶️ Original song:\n${ytUrl}\n\n` +
             `🎵 Karaoke (no vocals):\n${karUrl}\n\n` +
             `🎙️ Vocals only:\n${vocUrl}`;
@@ -512,10 +529,17 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                 // Build WhatsApp message with ASCII symbols
                 const waPhone = normalizePhoneToWa(phone);
                 const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                // Prefer selected shifted URLs when available.
                 let karUrl = buildTrackUrl(videoId, "karaoke", parsedShift);
                 let vocUrl = buildTrackUrl(videoId, "vocals", parsedShift);
-                if (shiftVersions) {
+
+                // Always prefer URL set for the requested shift from query string when present.
+                if (!isZeroShift && shiftVersions) {
+                  const requested = findShiftEntry(shiftVersions, parsedShift);
+                  if (requested) {
+                    karUrl = requested.karaoke || karUrl;
+                    vocUrl = requested.vocals || vocUrl;
+                  }
+                } else if (shiftVersions) {
                   if (selectedShift === "original") {
                     karUrl = shiftVersions.original.karaoke || karUrl;
                     vocUrl = shiftVersions.original.vocals || vocUrl;
@@ -530,9 +554,13 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                 const shironetUrl = `https://shironet.mako.co.il/search?q=${encodeURIComponent(title)}`;
                 const tab4uUrl = `https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title)}`;
                 const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}&shift=${encodeURIComponent(parsedShift)}`;
+                const shiftLine = !isZeroShift
+                  ? `# הסטת סולם: ${parsedShift > 0 ? `+${parsedShift}` : parsedShift}\n`
+                  : "";
                 const msg =
                   `*${title}* — ${artist || ''}\n` +
                   `# אורך: ${syncDuration ? formatClock(syncDuration) : ''}\n` +
+                  shiftLine +
                   `# מהטלפון: ${waPhone}\n` +
                   `# יוטיוב: ${ytUrl}\n\n` +
                   `- [קריוקי בלבד](${karUrl})\n` +
