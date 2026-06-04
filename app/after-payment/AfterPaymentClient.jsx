@@ -85,6 +85,37 @@ function findShiftEntry(versions, rawShift) {
   }) || null;
 }
 
+function hasCompletePair(entry) {
+  return Boolean(entry?.karaoke) && Boolean(entry?.vocals);
+}
+
+function getUrlsForShiftSelection(versions, shiftKey, fallbackKar, fallbackVoc) {
+  if (!versions) return { kar: fallbackKar, voc: fallbackVoc };
+
+  if (shiftKey === "original") {
+    return {
+      kar: versions?.original?.karaoke || fallbackKar,
+      voc: versions?.original?.vocals || fallbackVoc,
+    };
+  }
+
+  const found = Array.isArray(versions.shifts)
+    ? versions.shifts.find((s) => s.suffix === shiftKey)
+    : null;
+
+  if (!hasCompletePair(found)) {
+    return {
+      kar: versions?.original?.karaoke || fallbackKar,
+      voc: versions?.original?.vocals || fallbackVoc,
+    };
+  }
+
+  return {
+    kar: found.karaoke || fallbackKar,
+    voc: found.vocals || fallbackVoc,
+  };
+}
+
 export default function AfterPaymentClient({ videoId, errorDescription, phone, title, artist = "", lang: initialLang, shift }) {
   // Always prefer the lang prop from searchParams (from URL)
   const lang = initialLang === "en" ? "en" : "he";
@@ -103,6 +134,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const [vocalsUrl, setVocalsUrl] = useState("");
   const [shiftVersions, setShiftVersions] = useState(null); // { original, shifts }
   const [selectedShift, setSelectedShift] = useState("original");
+  const requestedShiftEntry = !isZeroShift ? findShiftEntry(shiftVersions, parsedShift) : null;
+  const requestedShiftReady = isZeroShift || hasCompletePair(requestedShiftEntry);
   const [activeChannel, setActiveChannel] = useState("karaoke");
   const [syncSeconds, setSyncSeconds] = useState(0);
   const [syncDuration, setSyncDuration] = useState(0);
@@ -378,35 +411,30 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           return;
         }
 
-        // Default to original or first available shift
+        // Default to requested shift only when its pair exists, otherwise original.
         let initialShift = "original";
         if (!isZeroShift && data.shiftVersions) {
           const found = findShiftEntry(data.shiftVersions, parsedShift);
-          if (found?.suffix) initialShift = found.suffix;
+          if (hasCompletePair(found) && found?.suffix) initialShift = found.suffix;
         }
         setSelectedShift(initialShift);
 
-        // Helper to get URLs for a given shift
-        const getUrlsForShift = (shiftKey) => {
-          if (!data.shiftVersions) return { kar: kar, voc: voc };
-          if (shiftKey === "original") {
-            return {
-              kar: data.shiftVersions.original.karaoke || kar,
-              voc: data.shiftVersions.original.vocals || voc,
-            };
-          }
-          const found = data.shiftVersions.shifts.find(s => s.suffix === shiftKey);
-          return {
-            kar: found?.karaoke || kar,
-            voc: found?.vocals || voc,
-          };
-        };
-
         // Set URLs for selected shift
-        const { kar: karUrl, voc: vocUrl } = getUrlsForShift(initialShift);
+        const { kar: karUrl, voc: vocUrl } = getUrlsForShiftSelection(data.shiftVersions, initialShift, kar, voc);
         setKaraokeUrl(karUrl);
         setVocalsUrl(vocUrl);
-        setStatus({ type: "success", message: lang === "he" ? copy.he.ready : copy.en.ready });
+
+        const requestedEntry = !isZeroShift ? findShiftEntry(data.shiftVersions, parsedShift) : null;
+        const isRequestedReadyNow = isZeroShift || hasCompletePair(requestedEntry);
+        const shiftPendingMessage = lang === "he"
+          ? `גרסת הסולם ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} עדיין בעיבוד. כרגע זמינה הגרסה המקורית.`
+          : `Key shift ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} is still processing. Original files are currently available.`;
+        setStatus({
+          type: "success",
+          message: isRequestedReadyNow
+            ? (lang === "he" ? copy.he.ready : copy.en.ready)
+            : `${lang === "he" ? copy.he.ready : copy.en.ready} ${shiftPendingMessage}`,
+        });
 
         // Send WA notification once (only if phone available)
         if (normalizedPhone && !waReadySentRef.current) {
@@ -441,6 +469,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
               });
             })
             .catch(() => {});
+        }
+
+        // Keep polling when original is ready but requested shift is still pending,
+        // so the requested shift button can become enabled automatically.
+        if (!isRequestedReadyNow && !stopped) {
+          timer = window.setTimeout(check, 5000);
         }
         return;
       } catch (err) {
@@ -529,45 +563,44 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                 // Build WhatsApp message with ASCII symbols
                 const waPhone = normalizePhoneToWa(phone);
                 const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                let karUrl = buildTrackUrl(videoId, "karaoke", parsedShift);
-                let vocUrl = buildTrackUrl(videoId, "vocals", parsedShift);
-
-                // Always prefer URL set for the requested shift from query string when present.
-                if (!isZeroShift && shiftVersions) {
-                  const requested = findShiftEntry(shiftVersions, parsedShift);
-                  if (requested) {
-                    karUrl = requested.karaoke || karUrl;
-                    vocUrl = requested.vocals || vocUrl;
-                  }
-                } else if (shiftVersions) {
-                  if (selectedShift === "original") {
-                    karUrl = shiftVersions.original.karaoke || karUrl;
-                    vocUrl = shiftVersions.original.vocals || vocUrl;
-                  } else {
-                    const found = shiftVersions.shifts.find((s) => s.suffix === selectedShift);
-                    if (found) {
-                      karUrl = found.karaoke || karUrl;
-                      vocUrl = found.vocals || vocUrl;
-                    }
-                  }
-                }
+                const fallbackOriginalKar = shiftVersions?.original?.karaoke || `${CDN_BASE}/${videoId}/karaoke.mp3`;
+                const fallbackOriginalVoc = shiftVersions?.original?.vocals || `${CDN_BASE}/${videoId}/vocals.mp3`;
+                const { kar: karUrl, voc: vocUrl } = getUrlsForShiftSelection(
+                  shiftVersions,
+                  selectedShift,
+                  fallbackOriginalKar,
+                  fallbackOriginalVoc
+                );
                 const shironetUrl = `https://shironet.mako.co.il/search?q=${encodeURIComponent(title)}`;
                 const tab4uUrl = `https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title)}`;
                 const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}&shift=${encodeURIComponent(parsedShift)}`;
-                const shiftLine = !isZeroShift
-                  ? `# הסטת סולם: ${parsedShift > 0 ? `+${parsedShift}` : parsedShift}\n`
+                const safeKarUrl = encodeURI(karUrl);
+                const safeVocUrl = encodeURI(vocUrl);
+                const safeShironetUrl = encodeURI(shironetUrl);
+                const safeTab4uUrl = encodeURI(tab4uUrl);
+                const safeAfterPaymentUrl = encodeURI(afterPaymentUrl);
+                const selectedShiftEntry = selectedShift !== "original" && shiftVersions
+                  ? shiftVersions.shifts.find((s) => s.suffix === selectedShift)
+                  : null;
+                const selectedShiftLabel = selectedShiftEntry?.label || null;
+                const requestedPendingLine = !requestedShiftReady && !isZeroShift
+                  ? `# הסטת סולם מבוקשת: ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} (בהכנה, כרגע קבצים מקוריים)\n`
+                  : "";
+                const selectedShiftLine = selectedShiftLabel
+                  ? `# הסטת סולם: ${selectedShiftLabel}\n`
                   : "";
                 const msg =
                   `*${title}* — ${artist || ''}\n` +
                   `# אורך: ${syncDuration ? formatClock(syncDuration) : ''}\n` +
-                  shiftLine +
+                  selectedShiftLine +
+                  requestedPendingLine +
                   `# מהטלפון: ${waPhone}\n` +
                   `# יוטיוב: ${ytUrl}\n\n` +
-                  `- [קריוקי בלבד](${karUrl})\n` +
-                  `- [שירה בלבד](${vocUrl})\n` +
-                  `- [מילים בשירונט](${shironetUrl})\n` +
-                  `- [אקורדים TAB4U](${tab4uUrl})\n` +
-                  `- [דף הורדה](${afterPaymentUrl})\n`;
+                  `- קריוקי בלבד: ${safeKarUrl}\n` +
+                  `- שירה בלבד: ${safeVocUrl}\n` +
+                  `- מילים בשירונט: ${safeShironetUrl}\n` +
+                  `- אקורדים TAB4U: ${safeTab4uUrl}\n` +
+                  `- דף הורדה: ${safeAfterPaymentUrl}\n`;
                 return `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
               })()}
               target="_blank"
@@ -587,27 +620,48 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
               className={selectedShift === "original" ? "shift-btn is-active" : "shift-btn"}
               onClick={() => {
                 setSelectedShift("original");
-                setKaraokeUrl(shiftVersions.original.karaoke);
-                setVocalsUrl(shiftVersions.original.vocals);
+                setKaraokeUrl(shiftVersions.original.karaoke || `${CDN_BASE}/${videoId}/karaoke.mp3`);
+                setVocalsUrl(shiftVersions.original.vocals || `${CDN_BASE}/${videoId}/vocals.mp3`);
               }}
             >
               Original
             </button>
+            {!isZeroShift && !requestedShiftReady && (
+              <button
+                type="button"
+                className="shift-btn"
+                disabled
+                title={lang === "he" ? "גרסת הסולם עדיין לא מוכנה" : "Shifted version is still processing"}
+                style={{ opacity: 0.6, cursor: "not-allowed" }}
+              >
+                {shiftDisplay} (processing)
+              </button>
+            )}
             {shiftVersions.shifts.map((s) => (
               <button
                 key={s.suffix}
                 type="button"
                 className={selectedShift === s.suffix ? "shift-btn is-active" : "shift-btn"}
+                disabled={!hasCompletePair(s)}
                 onClick={() => {
+                  if (!hasCompletePair(s)) return;
                   setSelectedShift(s.suffix);
                   setKaraokeUrl(s.karaoke);
                   setVocalsUrl(s.vocals);
                 }}
+                style={!hasCompletePair(s) ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
               >
-                {s.label}
+                {hasCompletePair(s) ? s.label : `${s.label} (processing)`}
               </button>
             ))}
           </div>
+        )}
+        {!requestedShiftReady && !isZeroShift && (
+          <p className="result info" style={{ marginTop: "0.25rem" }}>
+            {lang === "he"
+              ? `הסטת סולם ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} עדיין בעיבוד. כרגע ניתן לשתף ולהשמיע את הגרסה המקורית.`
+              : `Key shift ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} is still processing. Sharing and playback currently use original files.`}
+          </p>
         )}
         <div className="lyrics-links" style={{ display: 'flex', gap: '3rem', justifyContent: 'center', margin: '1.5rem 0' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
