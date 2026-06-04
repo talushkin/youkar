@@ -12,6 +12,24 @@ function getBackendHeaders() {
   return headers;
 }
 
+function normalizeLang(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  return raw === "HE" ? "HE" : "EN";
+}
+
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("972")) return digits;
+  if (digits.startsWith("0")) return `972${digits.slice(1)}`;
+  return digits;
+}
+
+function formatE164Phone(value) {
+  const normalized = normalizePhone(value);
+  return normalized ? `+${normalized}` : null;
+}
+
 const apiBase = () => process.env.BACKEND_BASE_URL || "https://be-tan-theta.vercel.app";
 
 export async function GET(request) {
@@ -36,10 +54,14 @@ export async function GET(request) {
       ? data
       : (Array.isArray(data?.pending) ? data.pending : (Array.isArray(data?.array) ? data.array : []));
 
+    const filteredPending = videoId
+      ? pending.filter((item) => String(item?.videoId || "") === videoId)
+      : pending;
+
     return NextResponse.json({
       ok: true,
-      pending,
-      count: pending.length,
+      pending: filteredPending,
+      count: filteredPending.length,
     });
   } catch (error) {
     return NextResponse.json(
@@ -65,6 +87,13 @@ export async function POST(request) {
         if (!videoId) return null;
 
         const incomingMeta = incoming?.meta || {};
+        const userLang = normalizeLang(incoming?.userLang || incomingMeta?.userLang || incoming?.lang || incomingMeta?.lang);
+        const lang = normalizeLang(incoming?.lang || incomingMeta?.lang || userLang);
+        const phone = normalizePhone(incoming?.phone || incomingMeta?.phone || incomingMeta?.fromPhone || incoming?.fromPhone);
+        const fromPhone = formatE164Phone(incomingMeta?.fromPhone || incoming?.fromPhone || phone);
+        const rawKeyShift = incomingMeta?.keyShift ?? incomingMeta?.shiftKey ?? incoming?.keyShift ?? incoming?.shiftKey ?? null;
+        const parsedKeyShift = rawKeyShift === null || rawKeyShift === "" ? null : Number(rawKeyShift);
+        const keyShift = Number.isFinite(parsedKeyShift) ? parsedKeyShift : null;
 
         return {
           videoId,
@@ -78,15 +107,24 @@ export async function POST(request) {
           duration: incoming?.duration || "N/A",
           voc: incoming?.voc ?? null,
           kar: incoming?.kar ?? null,
+          fromPhone,
+          keyShift,
+          shiftKey: keyShift,
           meta: {
             playlistId: incomingMeta.playlistId ?? null,
             playlistName: incomingMeta.playlistName ?? null,
             source: incomingMeta.source || "spotit-FE",
             kind: incomingMeta.kind || "karaoke-missing",
-            fromPhone: incomingMeta.fromPhone ?? null,
-            userLang: incomingMeta.userLang ?? null,
-            keyShift: incomingMeta.keyShift ?? null,
+            fromPhone,
+            userLang,
+            keyShift,
+            shiftKey: keyShift,
+            lang,
+            phone,
           },
+          userLang,
+          lang,
+          phone,
         };
       })
       .filter(Boolean);
@@ -97,6 +135,12 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+
+    const firstEntry = normalizedEntries[0] || {};
+    const wishTitle = String(firstEntry?.title || (firstEntry?.videoId ? `YouTube ${firstEntry.videoId}` : "Request"));
+    const wishShift = firstEntry?.shiftKey ?? firstEntry?.keyShift ?? firstEntry?.meta?.shiftKey ?? firstEntry?.meta?.keyShift ?? 0;
+    const successWish = `${wishTitle} - added successfully with key shift of ${wishShift}`;
+    const failWish = `could not add ${wishTitle} ${wishShift}`;
 
     const backendUrl = `${apiBase()}/api/pending`;
     const backendHeaders = getBackendHeaders();
@@ -131,21 +175,31 @@ export async function POST(request) {
           ok: false,
           error: `Backend returned ${response.status}`,
           details: errorText,
+          wish: failWish,
         },
         { status: 502 }
       );
     }
 
     const result = await response.json();
+    const resultObj = result && typeof result === "object" && !Array.isArray(result) ? result : { result };
+    const addedCountRaw = Number(resultObj?.added);
+    const hasAddedField = Object.prototype.hasOwnProperty.call(resultObj, "added");
+    const wasAdded = hasAddedField ? Number.isFinite(addedCountRaw) && addedCountRaw > 0 : true;
+    const wish = wasAdded ? successWish : failWish;
 
     console.log("[api/pending][POST] Backend success", {
       url: backendUrl,
       status: response.status,
-      result,
+      result: resultObj,
+      wish,
     });
 
     // Mirror backend response shape so FE/internal tooling gets identical format.
-    return NextResponse.json(result, { status: response.status });
+    return NextResponse.json({
+      ...resultObj,
+      wish,
+    }, { status: response.status });
   } catch (error) {
     return NextResponse.json(
       {

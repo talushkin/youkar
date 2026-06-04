@@ -73,6 +73,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const [isPlaying, setIsPlaying] = useState(false);
   const waStartSentRef = useRef(false);
   const waReadySentRef = useRef(false);
+  const pendingPostedRef = useRef(false);
   const karaokeAudioRef = useRef(null);
   const vocalsAudioRef = useRef(null);
   const isSyncingRef = useRef(false);
@@ -203,28 +204,71 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     setSelectedShift("original");
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const normalizePhone = (raw) => {
+      const digits = String(raw || "").replace(/\D/g, "");
+      if (!digits) return "";
+      if (digits.startsWith("972")) return digits;
+      if (digits.startsWith("0")) return `972${digits.slice(1)}`;
+      return digits;
+    };
+    const userLangCode = lang === "he" ? "HE" : "EN";
+    const normalizedPhone = normalizePhone(phone);
+    const numericShift = Number(shift);
+    const normalizedShift = Number.isFinite(numericShift) ? numericShift : null;
 
-    const sendProcessingStartedWa = async () => {
-      if (!phone || waStartSentRef.current) return;
+    const queuePendingAfterPayment = async () => {
+      if (pendingPostedRef.current) return;
+      pendingPostedRef.current = true;
 
-      let ytTitle = title || `YouTube ${videoId}`;
-      let ytLink = youtubeUrl;
+      const payload = [
+        {
+          videoId,
+          link: youtubeUrl,
+          title: title || `YouTube ${videoId}`,
+          percent: "",
+          duration: syncDuration > 0 ? String(Math.floor(syncDuration)) : "N/A",
+          voc: null,
+          kar: null,
+          fromPhone: normalizedPhone ? `+${normalizedPhone}` : null,
+          keyShift: normalizedShift,
+          shiftKey: normalizedShift,
+          meta: {
+            playlistId: null,
+            playlistName: null,
+            source: "spotit-FE",
+            kind: "karaoke-missing",
+            fromPhone: normalizedPhone ? `+${normalizedPhone}` : null,
+            userLang: userLangCode,
+            keyShift: normalizedShift,
+            shiftKey: normalizedShift,
+            lang: userLangCode,
+            phone: normalizedPhone || null,
+          },
+          userLang: userLangCode,
+          lang: userLangCode,
+          phone: normalizedPhone || null,
+        },
+      ];
 
       try {
-        const pendingResponse = await fetch(`/api/pending?videoId=${encodeURIComponent(videoId)}`);
-        const pendingData = await pendingResponse.json();
-        if (pendingResponse.ok) {
-          const pendingItem = Array.isArray(pendingData?.pending) ? pendingData.pending[0] : null;
-          if (pendingItem?.title) {
-            ytTitle = String(pendingItem.title);
-          }
-          if (pendingItem?.link) {
-            ytLink = String(pendingItem.link);
-          }
-        }
+        alert(`Sending /api/pending payload:\n${JSON.stringify(payload, null, 2)}`);
+        await fetch("/api/pending", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
       } catch {
-        // Keep fallback title/link if pending lookup fails.
+        // Keep UX non-blocking; CDN polling can still continue.
       }
+    };
+
+    queuePendingAfterPayment();
+
+    const sendProcessingStartedWa = async () => {
+      if (!normalizedPhone || waStartSentRef.current) return;
+
+      const ytTitle = title || `YouTube ${videoId}`;
+      const ytLink = youtubeUrl;
 
       const waText =
         `✅ Payment successful!\n\n` +
@@ -235,10 +279,19 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         `🔗 YouTube: ${ytLink}`;
 
       try {
+        const waPayload = { to: normalizedPhone, text: waText, title: "Payment Confirmed" };
+        console.log("[after-payment][WA start] request", waPayload);
+
         const waResponse = await fetch("/api/wa", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: phone, text: waText, title: "Payment Confirmed" }),
+          body: JSON.stringify(waPayload),
+        });
+
+        const waData = await waResponse.json().catch(() => null);
+        console.log("[after-payment][WA start] response", {
+          status: waResponse.status,
+          body: waData,
         });
 
         if (waResponse.ok) {
@@ -301,20 +354,34 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         setStatus({ type: "success", message: lang === "he" ? copy.he.ready : copy.en.ready });
 
         // Send WA notification once (only if phone available)
-        if (phone && !waReadySentRef.current) {
+        if (normalizedPhone && !waReadySentRef.current) {
           waReadySentRef.current = true;
           const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+          const titleFromLinks = Array.isArray(data.links)
+            ? data.links.find((l) => String(l?.title || "").trim())?.title
+            : null;
           const waText =
             `🎤 Your Karaoke & Vocals files are ready!\n\n` +
-            `🎵 Title: ${title || `YouTube ${videoId}`}\n` +
+            `🎵 Title: ${titleFromLinks || title || `YouTube ${videoId}`}\n` +
             `▶️ Original song:\n${ytUrl}\n\n` +
             `🎵 Karaoke (no vocals):\n${karUrl}\n\n` +
             `🎙️ Vocals only:\n${vocUrl}`;
+          const waPayload = { to: normalizedPhone, text: waText, title: "Your Karaoke Files" };
+          console.log("[after-payment][WA ready] request", waPayload);
+
           fetch("/api/wa", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ to: phone, text: waText, title: "Your Karaoke Files" }),
-          }).catch(() => {});
+            body: JSON.stringify(waPayload),
+          })
+            .then(async (res) => {
+              const body = await res.json().catch(() => null);
+              console.log("[after-payment][WA ready] response", {
+                status: res.status,
+                body,
+              });
+            })
+            .catch(() => {});
         }
         return;
 
@@ -341,7 +408,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
       stopped = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [videoId, isPaymentError, phone, title]);
+  }, [videoId, isPaymentError, phone, title, lang, shift, syncDuration]);
 
   const ytEmbedUrl = videoId
     ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`

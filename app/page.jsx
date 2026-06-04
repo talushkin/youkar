@@ -108,8 +108,13 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.readText().then((clipText) => {
-        if (clipText && clipText.trim().toLowerCase().startsWith('https://www.yo')) {
-          setYoutubeUrl(clipText.trim());
+        const candidate = String(clipText || "").trim();
+        if (!candidate) return;
+
+        const hasYouTubeHost = /(?:youtube\.com|youtu\.be)/i.test(candidate);
+        const hasVideoId = Boolean(extractVideoId(candidate));
+        if (hasYouTubeHost || hasVideoId) {
+          setYoutubeUrl(candidate);
         }
       }).catch(() => {});
     }
@@ -1338,34 +1343,42 @@ export default function HomePage() {
       waMessage = err.message || "Could not send WhatsApp request";
     }
     try {
+      const pendingPayload = [
+        {
+          videoId,
+          title: sanitized,
+          artist: inputSongArtist,
+          duration: activeExample?.duration || "N/A",
+          fromPhone: `+972${normalizedPhone.slice(1)}`,
+          ...(keyShift !== 0 ? { keyShift, shiftKey: keyShift } : {}),
+          meta: {
+            fromPhone: `+972${normalizedPhone.slice(1)}`,
+            userLang: lang === "he" ? "HE" : "EN",
+            ...(keyShift !== 0 ? { keyShift, shiftKey: keyShift } : {}),
+          },
+        },
+      ];
+
+      alert(`Sending /api/pending payload:\n${JSON.stringify(pendingPayload, null, 2)}`);
+
       const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            videoId,
-            title: sanitized,
-            artist: inputSongArtist,
-            duration: activeExample?.duration || "N/A",
-            meta: {
-              fromPhone: `972${normalizedPhone.slice(1)}`,
-              userLang: lang === "he" ? "HE" : "EN",
-              ...(keyShift !== 0 ? { keyShift } : {}),
-            },
-          },
-        ]),
+        body: JSON.stringify(pendingPayload),
       });
       const data = await response.json();
       if (!response.ok) {
-        alert(`Error posting to queue: ${data.error || "Unknown error"}\nTitle: ${sanitized}\nShift: ${keyShift}`);
-        throw new Error(data.error || "Failed to create karaoke request");
+        const failureWish = data?.wish || `could not add ${sanitized} ${keyShift}`;
+        alert(`${failureWish}\nError posting to queue: ${data.error || "Unknown error"}`);
+        throw new Error(failureWish);
       }
+      const successWish = data?.wish || `${sanitized} - added successfully with key shift of ${keyShift}`;
       setIsInPendingQueue(true);
       setQueuedVideoId(data.videoId || videoId);
       setSongTitle(sanitized);
       setStatus({
         type: "success",
-        message: waFailed ? "Karaoke request created. WhatsApp notification failed." : "Karaoke request created and WhatsApp sent. Bypassing payment...",
+        message: waFailed ? `${successWish}. WhatsApp notification failed.` : `${successWish}. WhatsApp sent. Bypassing payment...`,
       });
       if (waFailed) {
         alert(waMessage);
@@ -1402,8 +1415,18 @@ export default function HomePage() {
     if (e.shiftKey) {
       await bypassPayment();
     } else {
-      // Normal submit logic (if any) goes here
-      // For now, do nothing if Shift is not held
+      if (!videoId || !hasValidPhone) {
+        setStatus({
+          type: "error",
+          message: "tel is required",
+        });
+        return;
+      }
+
+      const sanitized = sanitizeTitle(inputSongTitle, inputSongArtist);
+      const returnUrl = `${returnUrlBase}?videoId=${encodeURIComponent(videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&lang=${encodeURIComponent(lang)}&shift=${encodeURIComponent(keyShift)}`;
+      const paymentUrl = `/payment?videoId=${encodeURIComponent(videoId)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}&shift=${encodeURIComponent(keyShift)}`;
+      window.location.assign(paymentUrl);
     }
   };
 
@@ -1613,7 +1636,7 @@ export default function HomePage() {
             ) : null}
             {/* Key shift dropdown */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginBottom: 8, direction: 'ltr' }}>
                 <span style={{ minWidth: 32, textAlign: 'right', fontWeight: 500, color: '#2196f3' }}>-3</span>
                 <input
                   type="range"
@@ -1639,19 +1662,10 @@ export default function HomePage() {
                   aria-label={lang === 'he' ? 'הסטת סולם (חצאי טון)' : 'Key shift (semitones)'}
                   className="blue-thumb-slider"
                 />
+                <span style={{ minWidth: 32, textAlign: 'left', fontWeight: 500, color: '#2196f3' }}>+3</span>
                 <span style={{ minWidth: 70, textAlign: 'left', fontWeight: 500 }}>
-                  Tone: {keyShift > 0 ? `+${keyShift}` : keyShift} <span style={{ color: '#2196f3', marginLeft: 4 }}>+3</span>
+                  Tone: {keyShift > 0 ? `+${keyShift}` : keyShift}
                 </span>
-                {keyShift !== 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setKeyShift(0)}
-                    style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 4, border: '1px solid #2196f3', background: '#fff', color: '#2196f3', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
-                    aria-label={lang === 'he' ? 'אפס סולם' : 'Reset key shift'}
-                  >
-                    {lang === 'he' ? 'איפוס' : 'Reset'}
-                  </button>
-                )}
               </div>
             </div>
             {cdnFilesReady && videoId && !queuedVideoId ? (
