@@ -46,18 +46,40 @@ const copy = {
   },
 };
 
+function parseShiftValue(rawShift) {
+  const parsed = Number(rawShift);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getShiftSuffix(rawShift) {
+  const parsedShift = parseShiftValue(rawShift);
+  if (!parsedShift) return "";
+  const abs = Math.abs(parsedShift);
+  const nn = String(abs * 10).replace(/\.0$/, "");
+  return parsedShift > 0 ? `{#${nn}` : `{_${nn}`;
+}
+
+function buildTrackUrl(videoId, kind, rawShift) {
+  return `${CDN_BASE}/${videoId}/${kind}${getShiftSuffix(rawShift)}.mp3`;
+}
+
+function normalizePhoneToWa(rawPhone) {
+  const digits = String(rawPhone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("972")) return digits;
+  if (digits.startsWith("0")) return `972${digits.slice(1)}`;
+  return digits;
+}
+
 export default function AfterPaymentClient({ videoId, errorDescription, phone, title, artist = "", lang: initialLang, shift }) {
   // Always prefer the lang prop from searchParams (from URL)
   const lang = initialLang === "en" ? "en" : "he";
   // Defensive: force all UI strings to Hebrew if lang is he
   const ui = lang === "he" ? copy.he : copy.en;
 
-
-  const shiftNumber = Number(shift);
-  const isZeroShift = !Number.isFinite(shiftNumber) || shiftNumber === 0;
-
-  // Display shift value only when it is a real non-zero number.
-  const shiftDisplay = !isZeroShift ? (lang === "he" ? `הסטת סולם: ${shift}` : `Key shift: ${shift}`) : null;
+  const parsedShift = parseShiftValue(shift);
+  const isZeroShift = parsedShift === 0;
+  const shiftDisplay = !isZeroShift ? `${parsedShift > 0 ? "+" : ""}${parsedShift}` : null;
 
   const [status, setStatus] = useState({
     type: "pending",
@@ -176,6 +198,13 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     playSynced(activeChannel);
   };
 
+  const selectChannel = (source) => {
+    setActiveChannel(source);
+    if (isPlaying) {
+      playSynced(source);
+    }
+  };
+
   const isPaymentError = errorDescription && errorDescription !== "SUCCESS";
 
   useEffect(() => {
@@ -196,8 +225,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     }
 
     // Optimistically keep the known CDN pattern as fallback values.
-    const kar = `${CDN_BASE}/${videoId}/karaoke.mp3`;
-    const voc = `${CDN_BASE}/${videoId}/vocals.mp3`;
+    const kar = buildTrackUrl(videoId, "karaoke", parsedShift);
+    const voc = buildTrackUrl(videoId, "vocals", parsedShift);
     setKaraokeUrl(kar);
     setVocalsUrl(voc);
     setShiftVersions(null);
@@ -213,8 +242,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     };
     const userLangCode = lang === "he" ? "HE" : "EN";
     const normalizedPhone = normalizePhone(phone);
-    const numericShift = Number(shift);
-    const normalizedShift = Number.isFinite(numericShift) ? numericShift : null;
+    const normalizedShift = parsedShift || null;
 
     const queuePendingAfterPayment = async () => {
       if (pendingPostedRef.current) return;
@@ -316,10 +344,24 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         if (!response.ok) {
           throw new Error(data.error || "Failed to check file status");
         }
-
         // Store all available shift versions for UI
         if (data.shiftVersions) {
           setShiftVersions(data.shiftVersions);
+        }
+
+        const hasOriginalPair = Boolean(data?.files?.karaoke) && Boolean(data?.files?.vocals);
+        const hasShiftedPair = Array.isArray(data?.shiftVersions?.shifts)
+          && data.shiftVersions.shifts.some((s) => s?.karaoke && s?.vocals);
+
+        if (!hasOriginalPair && !hasShiftedPair) {
+          if (!stopped) {
+            setStatus({
+              type: "pending",
+              message: lang === "he" ? copy.he.pendingPoll : copy.en.pendingPoll,
+            });
+            timer = window.setTimeout(check, 5000);
+          }
+          return;
         }
 
         // Default to original or first available shift
@@ -384,14 +426,6 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
             .catch(() => {});
         }
         return;
-
-        if (!stopped) {
-          setStatus({
-            type: "pending",
-            message: "Still processing… we'll update this page automatically.",
-          });
-          timer = window.setTimeout(check, 5000);
-        }
       } catch (err) {
         if (!stopped) {
           setStatus({
@@ -408,7 +442,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
       stopped = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [videoId, isPaymentError, phone, title, lang, shift, syncDuration]);
+  }, [videoId, isPaymentError, phone, title, lang, shift, syncDuration, parsedShift]);
 
   const ytEmbedUrl = videoId
     ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`
@@ -436,7 +470,26 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         <h1 className="thank-you-title">{ui.thankYou}</h1>
         <p className="lead">{ui.lead}</p>
         {shiftDisplay && (
-          <div style={{ fontWeight: 600, fontSize: 18, margin: '0.5rem 0', color: '#2d7a2d', textAlign: 'center' }}>{shiftDisplay}</div>
+          <div style={{ display: "flex", justifyContent: "center", margin: "0.5rem 0 1rem" }}>
+            <button
+              type="button"
+              disabled
+              aria-label={lang === "he" ? `הסטת סולם ${shiftDisplay}` : `Key shift ${shiftDisplay}`}
+              style={{
+                border: "1px solid #1f8f4a",
+                background: "#e7f8ed",
+                color: "#146c35",
+                borderRadius: 999,
+                padding: "0.35rem 0.9rem",
+                fontWeight: 700,
+                fontSize: 16,
+                opacity: 1,
+                cursor: "default",
+              }}
+            >
+              {lang === "he" ? `🎹 הסטת סולם ${shiftDisplay}` : `🎹 Key Shift ${shiftDisplay}`}
+            </button>
+          </div>
         )}
 
         {videoId && (
@@ -456,18 +509,18 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
           <div style={{ margin: '1.5rem 0', textAlign: 'center' }}>
             <a
               href={(() => {
-                const phoneDigits = String(phone).replace(/^0/, '');
-                const waPhone = `972${phoneDigits}`;
+                // Build WhatsApp message with ASCII symbols
+                const waPhone = normalizePhoneToWa(phone);
                 const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                // Use selected shift for URLs
-                let karUrl = karaokeUrl;
-                let vocUrl = vocalsUrl;
+                // Prefer selected shifted URLs when available.
+                let karUrl = buildTrackUrl(videoId, "karaoke", parsedShift);
+                let vocUrl = buildTrackUrl(videoId, "vocals", parsedShift);
                 if (shiftVersions) {
                   if (selectedShift === "original") {
                     karUrl = shiftVersions.original.karaoke || karUrl;
                     vocUrl = shiftVersions.original.vocals || vocUrl;
                   } else {
-                    const found = shiftVersions.shifts.find(s => s.suffix === selectedShift);
+                    const found = shiftVersions.shifts.find((s) => s.suffix === selectedShift);
                     if (found) {
                       karUrl = found.karaoke || karUrl;
                       vocUrl = found.vocals || vocUrl;
@@ -476,7 +529,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                 }
                 const shironetUrl = `https://shironet.mako.co.il/search?q=${encodeURIComponent(title)}`;
                 const tab4uUrl = `https://www.tab4u.com/resultsSimple?q=${encodeURIComponent(title)}`;
-                const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}`;
+                const afterPaymentUrl = `https://youkar.vercel.app/after-payment?videoId=${videoId}&title=${encodeURIComponent(title)}&shift=${encodeURIComponent(parsedShift)}`;
                 const msg =
                   `*${title}* — ${artist || ''}\n` +
                   `# אורך: ${syncDuration ? formatClock(syncDuration) : ''}\n` +

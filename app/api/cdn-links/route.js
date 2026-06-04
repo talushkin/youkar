@@ -88,9 +88,9 @@ export async function GET(request) {
     const hasVocals = contents.some((item) => String(item?.Key || "") === vocalsKey);
     const hasMeta = contents.some((item) => String(item?.Key || "") === metaKey);
 
-    // Detect all available key shift versions for karaoke and vocals
-    // Match files like karaoke.mp3, karaoke#10.mp3, karaoke_10.mp3, vocals#-10.mp3, etc.
-    const shiftRegex = /^(karaoke|vocals)([#_])(-?\d+)\.mp3$/i;
+    // Detect all available key shift versions for karaoke and vocals.
+    // Supports legacy and current suffixes: {#15, {_15, #15, _15.
+    const shiftedTrackRegex = /^(karaoke|vocals)(\{?[#_]\d+)\.mp3$/i;
     const shiftVersions = { original: { karaoke: null, vocals: null }, shifts: [] };
     // Always add original
     shiftVersions.original.karaoke = hasKaraoke ? `${cdnBase}/${encodeURIComponent(videoId)}/karaoke.mp3` : null;
@@ -99,29 +99,24 @@ export async function GET(request) {
     // Find all shifted versions
     for (const item of contents) {
       const key = String(item?.Key || "").replace(prefix, "");
-      const match = key.match(shiftRegex);
-      if (match) {
-        const type = match[1];
-        const sep = match[2];
-        const shiftRaw = match[3];
-        // shiftRaw is e.g. 10, -15, etc. Convert to float (divide by 10)
-        const shiftVal = Number(shiftRaw) / 10;
-        // For zero shift, keep the canonical original filename without suffix.
-        if (!Number.isFinite(shiftVal) || shiftVal === 0) {
-          continue;
-        }
-        // Compose suffix for UI
-        const suffix = `${sep}${shiftRaw}`;
-        // Compose label: +1, -1.5, etc.
-        const label = shiftVal > 0 ? `+${shiftVal}` : `${shiftVal}`;
-        // Find or create entry for this shift
-        let entry = shiftVersions.shifts.find((s) => s.suffix === suffix);
-        if (!entry) {
-          entry = { label, suffix, shift: shiftVal, karaoke: null, vocals: null };
-          shiftVersions.shifts.push(entry);
-        }
-        entry[type] = `${cdnBase}/${encodeURIComponent(videoId)}/${type}${suffix}.mp3`;
+      const match = key.match(shiftedTrackRegex);
+      if (!match) continue;
+
+      const type = match[1].toLowerCase();
+      const suffix = match[2];
+      const digits = Number(suffix.replace(/[^\d]/g, ""));
+      if (!Number.isFinite(digits) || digits === 0) continue;
+
+      const sign = suffix.includes("#") ? 1 : -1;
+      const shiftVal = sign * (digits / 10);
+      const label = shiftVal > 0 ? `+${shiftVal}` : `${shiftVal}`;
+
+      let entry = shiftVersions.shifts.find((s) => s.suffix === suffix);
+      if (!entry) {
+        entry = { label, suffix, shift: shiftVal, karaoke: null, vocals: null };
+        shiftVersions.shifts.push(entry);
       }
+      entry[type] = `${cdnBase}/${encodeURIComponent(videoId)}/${type}${suffix}.mp3`;
     }
     // Sort shifts by shift value ascending
     shiftVersions.shifts.sort((a, b) => a.shift - b.shift);
