@@ -134,8 +134,6 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const [vocalsUrl, setVocalsUrl] = useState("");
   const [shiftVersions, setShiftVersions] = useState(null); // { original, shifts }
   const [selectedShift, setSelectedShift] = useState("original");
-  const requestedShiftEntry = !isZeroShift ? findShiftEntry(shiftVersions, parsedShift) : null;
-  const requestedShiftReady = isZeroShift || hasCompletePair(requestedShiftEntry);
   const [activeChannel, setActiveChannel] = useState("karaoke");
   const [syncSeconds, setSyncSeconds] = useState(0);
   const [syncDuration, setSyncDuration] = useState(0);
@@ -146,6 +144,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   const karaokeAudioRef = useRef(null);
   const vocalsAudioRef = useRef(null);
   const isSyncingRef = useRef(false);
+  const requestedShiftEntry = !isZeroShift ? findShiftEntry(shiftVersions, parsedShift) : null;
+  const requestedShiftReady = isZeroShift || hasCompletePair(requestedShiftEntry);
 
   const getAudioPair = (source) => {
     const primary = source === "karaoke" ? karaokeAudioRef.current : vocalsAudioRef.current;
