@@ -723,16 +723,6 @@ export default function HomePage() {
     handleExamplePlay(idx, "mix");
   }
 
-  // Handler for alert on title click in examples
-  const handleExampleTitleClick = (songIndex) => {
-    const example = EXAMPLE_SONGS[songIndex];
-    const vid = extractVideoId(example.youtube);
-    const karCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/karaoke.mp3` : "";
-    const vocCdn = vid ? `https://d23du7ibe4a1ni.cloudfront.net/${vid}/vocals.mp3` : "";
-    alert(
-      `Video ID: ${vid}\nTitle: ${example.title}\nKaraoke CDN: ${karCdn}\nVocals CDN: ${vocCdn}`
-    );
-  };
     // ...existing code...
     // In your examples table/list rendering, add:
     // <span onClick={() => handleExampleTitleClick(idx)}>{example.title}</span>
