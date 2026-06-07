@@ -1480,6 +1480,27 @@ export default function HomePage() {
         <p className="lead">{ui.lead}</p>
 
         <form className="request-form" onSubmit={submitCreate} dir={lang === "he" ? "rtl" : "ltr"}>
+          <div className="mini-player-wrap">
+            {/* Hidden YT IFrame API host – kept invisible, used only for JS API */}
+            <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+              <div ref={ytHostRef} />
+            </div>
+            {currentPreviewVideoId ? (
+              <div className="yt-embed-wrap">
+                <iframe
+                  key={`${currentPreviewVideoId}-${previewNonce}`}
+                  ref={previewIframeRef}
+                  className="yt-embed-iframe"
+                  src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&controls=0&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&start=${Math.max(0, Math.floor(previewTimeRef.current || 0))}&mute=${previewMuted ? 1 : 0}&enablejsapi=1`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  title="YouTube preview"
+                />
+              </div>
+            ) : null}
+          </div>
+
           <label htmlFor="youtube" className="youtube-step-label">{ui.step1}</label>
           <div className="search-input-wrap">
             <input
@@ -1960,25 +1981,6 @@ export default function HomePage() {
             </table>
           </div>
 
-          <div className="mini-player-wrap">
-            {/* Hidden YT IFrame API host – kept invisible, used only for JS API */}
-            <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
-              <div ref={ytHostRef} />
-            </div>
-            {currentPreviewVideoId ? (
-              <div className="yt-embed-wrap">
-                <iframe
-                  key={`${currentPreviewVideoId}-${previewNonce}`}
-                  ref={previewIframeRef}
-                  className="yt-embed-iframe"
-                  src={`https://www.youtube.com/embed/${currentPreviewVideoId}?enablejsapi=1&controls=1&autoplay=${previewNonce > 0 ? 1 : 0}&playsinline=1&rel=0&mute=${previewMuted ? 1 : 0}`}
-                  allow="autoplay; encrypted-media; picture-in-picture"
-                  allowFullScreen
-                  title="YouTube preview"
-                />
-              </div>
-            ) : null}
-          </div>
         </div>
 
         {status.type !== "idle" ? (
