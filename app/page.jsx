@@ -192,7 +192,7 @@ export default function HomePage() {
     setActiveExampleIndex(INPUT_ROW_INDEX);
     soloSourceRef.current = null;
     setSoloSource(null);
-    autoplayPreview(videoId, 0, true);
+    autoplayPreview(videoId, 0, false);
 
     // Always fetch video data from backend and update input
     fetch("/api/youtube/get-video-data", {
@@ -252,8 +252,8 @@ export default function HomePage() {
   const [youtubeDisplayValue, setYoutubeDisplayValue] = useState("");
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
   const [showSongDropdown, setShowSongDropdown] = useState(false);
-  const [phoneAreaCode, setPhoneAreaCode] = useState("050");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneAreaCode, setPhoneAreaCode] = useState("054");
+  const [phoneNumber, setPhoneNumber] = useState("2804003");
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isCreating, setIsCreating] = useState(false);
   const [queuedVideoId, setQueuedVideoId] = useState("");
@@ -292,7 +292,7 @@ export default function HomePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewVideoId, setPreviewVideoId] = useState("");
   const [previewNonce, setPreviewNonce] = useState(0);
-  const [previewMuted, setPreviewMuted] = useState(true);
+  const [previewMuted, setPreviewMuted] = useState(false);
   const [showCreateHint, setShowCreateHint] = useState(false);
   const [soloSource, setSoloSource] = useState(null);
 
@@ -426,17 +426,21 @@ export default function HomePage() {
     if (!nextVideoId) return;
     const safeStart = Math.max(0, Math.floor(Number(startSeconds) || 0));
     previewTimeRef.current = safeStart;
-    setPreviewMuted(true); // Always mute YT
+    setPreviewMuted(Boolean(muted));
     setPreviewVideoId(nextVideoId);
     setPreviewNonce((value) => value + 1);
     setIsPlaying(true);
-    // Force mute and volume 0 for YT iframe
     setTimeout(() => {
-      mutePreviewIframe();
+      if (muted) {
+        mutePreviewIframe();
+        return;
+      }
+
+      unmutePreviewIframe();
     }, 200);
   };
 
-  const activateVideoPreview = (nextVideoId, muted = true) => {
+  const activateVideoPreview = (nextVideoId, muted = false) => {
     if (!nextVideoId) return;
     setActiveSource("mix");
     setActiveExampleIndex(INPUT_ROW_INDEX);
@@ -740,7 +744,7 @@ export default function HomePage() {
     applyAction();
   };
   function handleExampleTitleClick(idx) {
-    setPreviewMuted(true);
+    setPreviewMuted(false);
     // Remove toggle: always restart playback from 0:00 for same title
     pauseCurrent();
     setIsPlaying(false);
@@ -1188,13 +1192,14 @@ export default function HomePage() {
     setYoutubeUrl(nextUrl);
     setYoutubeDisplayValue(nextDisplay || nextUrl);
     if (nextVideoId) {
-      // For search, only play YT preview; use muted-first autoplay for reliability.
+      // For search/direct selection, play the YouTube preview as the active audio source.
       setActiveSource("mix");
+      setPreviewMuted(false);
       setActiveExampleIndex(INPUT_ROW_INDEX);
       soloSourceRef.current = null;
       setSoloSource(null);
       pauseCurrent();
-      autoplayPreview(nextVideoId, 0, true);
+      autoplayPreview(nextVideoId, 0, false);
     }
     setShowSongDropdown(false);
     setSongSearchResults([]);
@@ -1258,6 +1263,7 @@ export default function HomePage() {
     soloSourceRef.current = null;
     setSoloSource(null);
     setActiveSource("mix");
+    setPreviewMuted(false);
     if (idx !== null && typeof idx === "number") {
       setActiveExampleIndex(idx);
       const song = EXAMPLE_SONGS[idx];
@@ -1515,7 +1521,7 @@ export default function HomePage() {
                 setYoutubeDisplayValue("");
                 setYoutubeUrl(nextUrl);
                 if (nextVideoId) {
-                  activateVideoPreview(nextVideoId, true);
+                  activateVideoPreview(nextVideoId, false);
                 }
                 setQueuedVideoId("");
                 setStatus({ type: "idle", message: "" });
@@ -1533,7 +1539,7 @@ export default function HomePage() {
 
                 const pastedVideoId = extractVideoId(cleaned);
                 if (pastedVideoId) {
-                  activateVideoPreview(pastedVideoId, true);
+                  activateVideoPreview(pastedVideoId, false);
                 }
               }}
               required
