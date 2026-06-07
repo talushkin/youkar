@@ -333,8 +333,11 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
     };
   }, [videoId, isPaymentError, phone, title]);
 
+  const originParam = typeof window !== "undefined"
+    ? `&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.href)}`
+    : "";
   const ytEmbedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`
+    ? `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1${originParam}`
     : "";
   const isPending = status.type === "pending";
 
@@ -361,9 +364,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         {videoId && (
           <div className="yt-embed-wrap">
             <iframe
+              key={videoId}
               src={ytEmbedUrl}
               title="Song preview"
               className="yt-embed-iframe"
+              loading="eager"
+              referrerPolicy="strict-origin-when-cross-origin"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
