@@ -51,6 +51,13 @@ function parseShiftValue(rawShift) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatShiftDisplay(rawShift, lang) {
+  const parsedShift = parseShiftValue(rawShift);
+  const text = `${parsedShift > 0 ? "+" : ""}${parsedShift}`;
+  // Keep numeric shift in LTR order when embedded inside Hebrew/RTL sentences.
+  return lang === "he" ? `\u200E${text}\u200E` : text;
+}
+
 function getShiftSuffix(rawShift) {
   const parsedShift = parseShiftValue(rawShift);
   if (!parsedShift) return "";
@@ -124,7 +131,12 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
 
   const parsedShift = parseShiftValue(shift);
   const isZeroShift = parsedShift === 0;
-  const shiftDisplay = !isZeroShift ? `${parsedShift > 0 ? "+" : ""}${parsedShift}` : null;
+  const shiftDisplay = !isZeroShift ? formatShiftDisplay(parsedShift, lang) : null;
+
+function getDisplayShiftLabel(rawLabel, lang) {
+  const label = String(rawLabel || "");
+  return lang === "he" ? `\u200E${label}\u200E` : label;
+}
 
   const [status, setStatus] = useState({
     type: "pending",
@@ -427,8 +439,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         const requestedEntry = !isZeroShift ? findShiftEntry(data.shiftVersions, parsedShift) : null;
         const isRequestedReadyNow = isZeroShift || hasCompletePair(requestedEntry);
         const shiftPendingMessage = lang === "he"
-          ? `גרסת הסולם ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} עדיין בעיבוד. כרגע זמינה הגרסה המקורית.`
-          : `Key shift ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} is still processing. Original files are currently available.`;
+          ? `גרסת הסולם ${formatShiftDisplay(parsedShift, lang)} עדיין בעיבוד. כרגע זמינה הגרסה המקורית.`
+          : `Key shift ${formatShiftDisplay(parsedShift, lang)} is still processing. Original files are currently available.`;
         setStatus({
           type: "success",
           message: isRequestedReadyNow
@@ -444,7 +456,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
             ? data.links.find((l) => String(l?.title || "").trim())?.title
             : null;
           const shiftLine = !isZeroShift
-            ? `🎹 Shift: ${parsedShift > 0 ? `+${parsedShift}` : parsedShift}\n`
+            ? `🎹 Shift: ${formatShiftDisplay(parsedShift, "en")}\n`
             : "";
           const waText =
             `🎤 Your Karaoke & Vocals files are ready!\n\n` +
@@ -496,7 +508,7 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
   }, [videoId, isPaymentError, phone, title, lang, shift, syncDuration, parsedShift]);
 
   const ytEmbedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1`
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`
     : "";
   const isPending = status.type === "pending";
 
@@ -584,10 +596,10 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                   : null;
                 const selectedShiftLabel = selectedShiftEntry?.label || null;
                 const requestedPendingLine = !requestedShiftReady && !isZeroShift
-                  ? `# הסטת סולם מבוקשת: ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} (בהכנה, כרגע קבצים מקוריים)\n`
+                  ? `# הסטת סולם מבוקשת: ${formatShiftDisplay(parsedShift, "he")} (בהכנה, כרגע קבצים מקוריים)\n`
                   : "";
                 const selectedShiftLine = selectedShiftLabel
-                  ? `# הסטת סולם: ${selectedShiftLabel}\n`
+                  ? `# הסטת סולם: ${getDisplayShiftLabel(selectedShiftLabel, "he")}\n`
                   : "";
                 const msg =
                   `*${title}* — ${artist || ''}\n` +
@@ -651,7 +663,9 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
                 }}
                 style={!hasCompletePair(s) ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
               >
-                {hasCompletePair(s) ? s.label : `${s.label} (processing)`}
+                {hasCompletePair(s)
+                  ? getDisplayShiftLabel(s.label, lang)
+                  : `${getDisplayShiftLabel(s.label, lang)} (processing)`}
               </button>
             ))}
           </div>
@@ -659,8 +673,8 @@ export default function AfterPaymentClient({ videoId, errorDescription, phone, t
         {!requestedShiftReady && !isZeroShift && (
           <p className="result info" style={{ marginTop: "0.25rem" }}>
             {lang === "he"
-              ? `הסטת סולם ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} עדיין בעיבוד. כרגע ניתן לשתף ולהשמיע את הגרסה המקורית.`
-              : `Key shift ${parsedShift > 0 ? `+${parsedShift}` : parsedShift} is still processing. Sharing and playback currently use original files.`}
+              ? `הסטת סולם ${formatShiftDisplay(parsedShift, lang)} עדיין בעיבוד. כרגע ניתן לשתף ולהשמיע את הגרסה המקורית.`
+              : `Key shift ${formatShiftDisplay(parsedShift, lang)} is still processing. Sharing and playback currently use original files.`}
           </p>
         )}
         <div className="lyrics-links" style={{ display: 'flex', gap: '3rem', justifyContent: 'center', margin: '1.5rem 0' }}>

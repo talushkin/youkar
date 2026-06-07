@@ -292,7 +292,7 @@ export default function HomePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewVideoId, setPreviewVideoId] = useState("");
   const [previewNonce, setPreviewNonce] = useState(0);
-  const [previewMuted, setPreviewMuted] = useState(false);
+  const [previewMuted, setPreviewMuted] = useState(true);
   const [showCreateHint, setShowCreateHint] = useState(false);
   const [soloSource, setSoloSource] = useState(null);
 
@@ -1786,6 +1786,15 @@ export default function HomePage() {
                 </div>
               </div>
             ) : null}
+            <button
+              ref={createButtonRef}
+              type="submit"
+              className="primary-cta create-cta-button"
+              disabled={!canCreate || isCreating}
+              aria-busy={isCreating}
+            >
+              {isCreating ? ui.creating : ui.create}
+            </button>
           </div>
                 <div className="download-links" style={{ marginBottom: 24 }}>
           <div className="download-row">
@@ -1952,9 +1961,23 @@ export default function HomePage() {
           </div>
 
           <div className="mini-player-wrap">
-            <div className="mini-player hidden-player" aria-hidden="true">
+            {/* Hidden YT IFrame API host – kept invisible, used only for JS API */}
+            <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
               <div ref={ytHostRef} />
             </div>
+            {currentPreviewVideoId ? (
+              <div className="yt-embed-wrap">
+                <iframe
+                  key={`${currentPreviewVideoId}-${previewNonce}`}
+                  ref={previewIframeRef}
+                  className="yt-embed-iframe"
+                  src={`https://www.youtube.com/embed/${currentPreviewVideoId}?enablejsapi=1&controls=1&autoplay=${previewNonce > 0 ? 1 : 0}&playsinline=1&rel=0&mute=${previewMuted ? 1 : 0}`}
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  title="YouTube preview"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
