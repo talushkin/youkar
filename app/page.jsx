@@ -108,8 +108,13 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.readText().then((clipText) => {
-        if (clipText && clipText.trim().toLowerCase().startsWith('https://www.yo')) {
-          setYoutubeUrl(clipText.trim());
+        const candidate = String(clipText || "").trim();
+        if (!candidate) return;
+
+        const hasYouTubeHost = /(?:youtube\.com|youtu\.be)/i.test(candidate);
+        const hasVideoId = Boolean(extractVideoId(candidate));
+        if (hasYouTubeHost || hasVideoId) {
+          setYoutubeUrl(candidate);
         }
       }).catch(() => {});
     }
@@ -187,7 +192,7 @@ export default function HomePage() {
     setActiveExampleIndex(INPUT_ROW_INDEX);
     soloSourceRef.current = null;
     setSoloSource(null);
-    autoplayPreview(videoId, 0, true);
+    autoplayPreview(videoId, 0, false);
 
     // Always fetch video data from backend and update input
     fetch("/api/youtube/get-video-data", {
@@ -247,8 +252,8 @@ export default function HomePage() {
   const [youtubeDisplayValue, setYoutubeDisplayValue] = useState("");
   const [isSearchingSongs, setIsSearchingSongs] = useState(false);
   const [showSongDropdown, setShowSongDropdown] = useState(false);
-  const [phoneAreaCode, setPhoneAreaCode] = useState("050");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneAreaCode, setPhoneAreaCode] = useState("054");
+  const [phoneNumber, setPhoneNumber] = useState("2804003");
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isCreating, setIsCreating] = useState(false);
   const [queuedVideoId, setQueuedVideoId] = useState("");
@@ -421,17 +426,21 @@ export default function HomePage() {
     if (!nextVideoId) return;
     const safeStart = Math.max(0, Math.floor(Number(startSeconds) || 0));
     previewTimeRef.current = safeStart;
-    setPreviewMuted(true); // Always mute YT
+    setPreviewMuted(Boolean(muted));
     setPreviewVideoId(nextVideoId);
     setPreviewNonce((value) => value + 1);
     setIsPlaying(true);
-    // Force mute and volume 0 for YT iframe
     setTimeout(() => {
-      mutePreviewIframe();
+      if (muted) {
+        mutePreviewIframe();
+        return;
+      }
+
+      unmutePreviewIframe();
     }, 200);
   };
 
-  const activateVideoPreview = (nextVideoId, muted = true) => {
+  const activateVideoPreview = (nextVideoId, muted = false) => {
     if (!nextVideoId) return;
     setActiveSource("mix");
     setActiveExampleIndex(INPUT_ROW_INDEX);
@@ -735,7 +744,7 @@ export default function HomePage() {
     applyAction();
   };
   function handleExampleTitleClick(idx) {
-    setPreviewMuted(true);
+    setPreviewMuted(false);
     // Remove toggle: always restart playback from 0:00 for same title
     pauseCurrent();
     setIsPlaying(false);
@@ -1183,13 +1192,14 @@ export default function HomePage() {
     setYoutubeUrl(nextUrl);
     setYoutubeDisplayValue(nextDisplay || nextUrl);
     if (nextVideoId) {
-      // For search, only play YT preview; use muted-first autoplay for reliability.
+      // For search/direct selection, play the YouTube preview as the active audio source.
       setActiveSource("mix");
+      setPreviewMuted(false);
       setActiveExampleIndex(INPUT_ROW_INDEX);
       soloSourceRef.current = null;
       setSoloSource(null);
       pauseCurrent();
-      autoplayPreview(nextVideoId, 0, true);
+      autoplayPreview(nextVideoId, 0, false);
     }
     setShowSongDropdown(false);
     setSongSearchResults([]);
@@ -1253,6 +1263,7 @@ export default function HomePage() {
     soloSourceRef.current = null;
     setSoloSource(null);
     setActiveSource("mix");
+    setPreviewMuted(false);
     if (idx !== null && typeof idx === "number") {
       setActiveExampleIndex(idx);
       const song = EXAMPLE_SONGS[idx];
@@ -1338,34 +1349,42 @@ export default function HomePage() {
       waMessage = err.message || "Could not send WhatsApp request";
     }
     try {
+      const pendingPayload = [
+        {
+          videoId,
+          title: sanitized,
+          artist: inputSongArtist,
+          duration: activeExample?.duration || "N/A",
+          fromPhone: `+972${normalizedPhone.slice(1)}`,
+          ...(keyShift !== 0 ? { keyShift, shiftKey: keyShift } : {}),
+          meta: {
+            fromPhone: `+972${normalizedPhone.slice(1)}`,
+            userLang: lang === "he" ? "HE" : "EN",
+            ...(keyShift !== 0 ? { keyShift, shiftKey: keyShift } : {}),
+          },
+        },
+      ];
+
+      alert(`Sending /api/pending payload:\n${JSON.stringify(pendingPayload, null, 2)}`);
+
       const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            videoId,
-            title: sanitized,
-            artist: inputSongArtist,
-            duration: activeExample?.duration || "N/A",
-            meta: {
-              fromPhone: `972${normalizedPhone.slice(1)}`,
-              userLang: lang === "he" ? "HE" : "EN",
-              ...(keyShift !== 0 ? { keyShift } : {}),
-            },
-          },
-        ]),
+        body: JSON.stringify(pendingPayload),
       });
       const data = await response.json();
       if (!response.ok) {
-        alert(`Error posting to queue: ${data.error || "Unknown error"}\nTitle: ${sanitized}\nShift: ${keyShift}`);
-        throw new Error(data.error || "Failed to create karaoke request");
+        const failureWish = data?.wish || `could not add ${sanitized} ${keyShift}`;
+        alert(`${failureWish}\nError posting to queue: ${data.error || "Unknown error"}`);
+        throw new Error(failureWish);
       }
+      const successWish = data?.wish || `${sanitized} - added successfully with key shift of ${keyShift}`;
       setIsInPendingQueue(true);
       setQueuedVideoId(data.videoId || videoId);
       setSongTitle(sanitized);
       setStatus({
         type: "success",
-        message: waFailed ? "Karaoke request created. WhatsApp notification failed." : "Karaoke request created and WhatsApp sent. Bypassing payment...",
+        message: waFailed ? `${successWish}. WhatsApp notification failed.` : `${successWish}. WhatsApp sent. Bypassing payment...`,
       });
       if (waFailed) {
         alert(waMessage);
@@ -1402,8 +1421,18 @@ export default function HomePage() {
     if (e.shiftKey) {
       await bypassPayment();
     } else {
-      // Normal submit logic (if any) goes here
-      // For now, do nothing if Shift is not held
+      if (!videoId || !hasValidPhone) {
+        setStatus({
+          type: "error",
+          message: "tel is required",
+        });
+        return;
+      }
+
+      const sanitized = sanitizeTitle(inputSongTitle, inputSongArtist);
+      const returnUrl = `${returnUrlBase}?videoId=${encodeURIComponent(videoId)}&phone=${encodeURIComponent(normalizedPhone)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&lang=${encodeURIComponent(lang)}&shift=${encodeURIComponent(keyShift)}`;
+      const paymentUrl = `/payment?videoId=${encodeURIComponent(videoId)}&title=${encodeURIComponent(sanitized)}&artist=${encodeURIComponent(inputSongArtist)}&phone=${encodeURIComponent(normalizedPhone)}&returnUrl=${encodeURIComponent(returnUrl)}&lang=${encodeURIComponent(lang)}&shift=${encodeURIComponent(keyShift)}`;
+      window.location.assign(paymentUrl);
     }
   };
 
@@ -1457,6 +1486,27 @@ export default function HomePage() {
         <p className="lead">{ui.lead}</p>
 
         <form className="request-form" onSubmit={submitCreate} dir={lang === "he" ? "rtl" : "ltr"}>
+          <div className="mini-player-wrap">
+            {/* Hidden YT IFrame API host – kept invisible, used only for JS API */}
+            <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+              <div ref={ytHostRef} />
+            </div>
+            {currentPreviewVideoId ? (
+              <div className="yt-embed-wrap">
+                <iframe
+                  key={`${currentPreviewVideoId}-${previewNonce}`}
+                  ref={previewIframeRef}
+                  className="yt-embed-iframe"
+                  src={`https://www.youtube-nocookie.com/embed/${currentPreviewVideoId}?autoplay=${previewNonce > 0 ? 1 : 0}&controls=0&playsinline=1&rel=0&playlist=${currentPreviewVideoId}&start=${Math.max(0, Math.floor(previewTimeRef.current || 0))}&mute=${previewMuted ? 1 : 0}&enablejsapi=1`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  title="YouTube preview"
+                />
+              </div>
+            ) : null}
+          </div>
+
           <label htmlFor="youtube" className="youtube-step-label">{ui.step1}</label>
           <div className="search-input-wrap">
             <input
@@ -1471,7 +1521,7 @@ export default function HomePage() {
                 setYoutubeDisplayValue("");
                 setYoutubeUrl(nextUrl);
                 if (nextVideoId) {
-                  activateVideoPreview(nextVideoId, true);
+                  activateVideoPreview(nextVideoId, false);
                 }
                 setQueuedVideoId("");
                 setStatus({ type: "idle", message: "" });
@@ -1489,7 +1539,7 @@ export default function HomePage() {
 
                 const pastedVideoId = extractVideoId(cleaned);
                 if (pastedVideoId) {
-                  activateVideoPreview(pastedVideoId, true);
+                  activateVideoPreview(pastedVideoId, false);
                 }
               }}
               required
@@ -1613,7 +1663,7 @@ export default function HomePage() {
             ) : null}
             {/* Key shift dropdown */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginBottom: 8, direction: 'ltr' }}>
                 <span style={{ minWidth: 32, textAlign: 'right', fontWeight: 500, color: '#2196f3' }}>-3</span>
                 <input
                   type="range"
@@ -1639,19 +1689,10 @@ export default function HomePage() {
                   aria-label={lang === 'he' ? 'הסטת סולם (חצאי טון)' : 'Key shift (semitones)'}
                   className="blue-thumb-slider"
                 />
+                <span style={{ minWidth: 32, textAlign: 'left', fontWeight: 500, color: '#2196f3' }}>+3</span>
                 <span style={{ minWidth: 70, textAlign: 'left', fontWeight: 500 }}>
-                  Tone: {keyShift > 0 ? `+${keyShift}` : keyShift} <span style={{ color: '#2196f3', marginLeft: 4 }}>+3</span>
+                  Tone: {keyShift > 0 ? `+${keyShift}` : keyShift}
                 </span>
-                {keyShift !== 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setKeyShift(0)}
-                    style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 4, border: '1px solid #2196f3', background: '#fff', color: '#2196f3', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
-                    aria-label={lang === 'he' ? 'אפס סולם' : 'Reset key shift'}
-                  >
-                    {lang === 'he' ? 'איפוס' : 'Reset'}
-                  </button>
-                )}
               </div>
             </div>
             {cdnFilesReady && videoId && !queuedVideoId ? (
@@ -1772,6 +1813,15 @@ export default function HomePage() {
                 </div>
               </div>
             ) : null}
+            <button
+              ref={createButtonRef}
+              type="submit"
+              className="primary-cta create-cta-button"
+              disabled={!canCreate || isCreating}
+              aria-busy={isCreating}
+            >
+              {isCreating ? ui.creating : ui.create}
+            </button>
           </div>
                 <div className="download-links" style={{ marginBottom: 24 }}>
           <div className="download-row">
@@ -1937,11 +1987,6 @@ export default function HomePage() {
             </table>
           </div>
 
-          <div className="mini-player-wrap">
-            <div className="mini-player hidden-player" aria-hidden="true">
-              <div ref={ytHostRef} />
-            </div>
-          </div>
         </div>
 
         {status.type !== "idle" ? (
