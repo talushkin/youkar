@@ -338,7 +338,6 @@ function getDisplayShiftLabel(rawLabel, lang) {
       ];
 
       try {
-        alert(`Sending /api/pending payload:\n${JSON.stringify(payload, null, 2)}`);
         await fetch("/api/pending", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

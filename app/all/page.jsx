@@ -216,9 +216,7 @@ export default function AllTracksPage() {
         מציג {fromIdx}-{toIdx} מתוך {filteredCount} תוצאות (מתוך {total})
       </div>
       {/* גריד 4 עמודות, כל עמודה עם כל הכותרות */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
+      <div className="all-tracks-grid" style={{
         columnGap: 4,
         rowGap: 1,
         marginTop: 12,

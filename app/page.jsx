@@ -266,6 +266,7 @@ export default function HomePage() {
   const [loadingInputLinks, setLoadingInputLinks] = useState(false);
   const [cdnFilesReady, setCdnFilesReady] = useState(false);
   const [isInPendingQueue, setIsInPendingQueue] = useState(false);
+  const [showLogsPanel, setShowLogsPanel] = useState(false);
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
   const [activeSource, setActiveSource] = useState("mix");
   const [ytApiLoaded, setYtApiLoaded] = useState(false);
@@ -1308,11 +1309,7 @@ export default function HomePage() {
       });
       return;
     }
-    // Alert on create
     const sanitized = sanitizeTitle(inputSongTitle, inputSongArtist);
-    alert(
-      `Sanitized Title: ${sanitized}\nArtist: ${inputSongArtist}\nDuration: ${activeExample?.duration || "Unknown"}`
-    );
     setIsCreating(true);
     setStatus({ type: "idle", message: "" });
     // Use sanitized title and artist
@@ -1365,8 +1362,6 @@ export default function HomePage() {
         },
       ];
 
-      alert(`Sending /api/pending payload:\n${JSON.stringify(pendingPayload, null, 2)}`);
-
       const response = await fetch("/api/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1375,19 +1370,27 @@ export default function HomePage() {
       const data = await response.json();
       if (!response.ok) {
         const failureWish = data?.wish || `could not add ${sanitized} ${keyShift}`;
-        alert(`${failureWish}\nError posting to queue: ${data.error || "Unknown error"}`);
+        setStatus({ type: "error", message: `${failureWish} — ${data.error || "Unknown error"}` });
         throw new Error(failureWish);
       }
-      const successWish = data?.wish || `${sanitized} - added successfully with key shift of ${keyShift}`;
       setIsInPendingQueue(true);
       setQueuedVideoId(data.videoId || videoId);
       setSongTitle(sanitized);
-      setStatus({
-        type: "success",
-        message: waFailed ? `${successWish}. WhatsApp notification failed.` : `${successWish}. WhatsApp sent. Bypassing payment...`,
-      });
-      if (waFailed) {
-        alert(waMessage);
+      // Fetch CDN pending.json to show queue position info
+      try {
+        const cdnRes = await fetch("https://d23du7ibe4a1ni.cloudfront.net/pending.json", { cache: "no-store" });
+        const cdnArray = await cdnRes.json().then((d) => (Array.isArray(d) ? d : []));
+        const resolvedId = data.videoId || videoId;
+        const cdnIdx = cdnArray.findIndex((item) => item.videoId === resolvedId);
+        const total = cdnArray.length;
+        const durationVal = activeExample?.duration || inputSongDuration || "N/A";
+        const shiftStr = keyShift !== 0 ? ` / shift: ${keyShift}` : "";
+        const queueInfo = cdnIdx >= 0
+          ? `song added to queue: ${sanitized} / ${durationVal}${shiftStr} / #${cdnIdx + 1} of ${total}`
+          : `song not found in CDN queue: ${sanitized} / ${durationVal}${shiftStr}`;
+        setStatus({ type: "success", message: waFailed ? `${queueInfo}. WhatsApp notification failed.` : `${queueInfo}` });
+      } catch {
+        setStatus({ type: "success", message: waFailed ? `Added to queue. WhatsApp notification failed.` : `Added to queue.` });
       }
       // Redirect to after-payment
       window.location.assign(
@@ -1409,6 +1412,14 @@ export default function HomePage() {
       if (e.ctrlKey && e.altKey && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
         if (typeof bypassPayment === 'function') bypassPayment();
+      }
+      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        window.open('/all', '_blank');
+      }
+      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'l' || e.key === 'L')) {
+        e.preventDefault();
+        setShowLogsPanel((v) => !v);
       }
     };
     window.addEventListener('keydown', handler);
@@ -1453,8 +1464,63 @@ export default function HomePage() {
     window.location.assign(paymentIframeUrl);
   }, [paymentIframeUrl]);
 
+  const beLogsUrl = (process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "https://be-tan-theta.vercel.app") + "/logs-be";
+
   return (
     <main className="page-bg">
+      {showLogsPanel && (
+        <div
+          onClick={() => setShowLogsPanel(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#071a2e", border: "1px solid #24527a", borderRadius: 12,
+              padding: "28px 36px", display: "flex", flexDirection: "column",
+              gap: 14, minWidth: 260, color: "#eaf2ff",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 18 }}>Logs</h2>
+            <a
+              href="/logs"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                background: "#0f4c81", color: "#fff", borderRadius: 8,
+                padding: "10px 16px", textDecoration: "none", textAlign: "center",
+              }}
+            >
+              /logs (FE)
+            </a>
+            <a
+              href={beLogsUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                background: "#0f4c81", color: "#fff", borderRadius: 8,
+                padding: "10px 16px", textDecoration: "none", textAlign: "center",
+              }}
+            >
+              /logs-be (BE)
+            </a>
+            <button
+              type="button"
+              onClick={() => setShowLogsPanel(false)}
+              style={{
+                background: "none", border: "1px solid #24527a", color: "#7ad0ff",
+                borderRadius: 8, padding: "6px 12px", cursor: "pointer", marginTop: 4,
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <section className={`card ${lang === "he" ? "lang-he" : "lang-en"}`}>
 
         <Script
@@ -1746,7 +1812,7 @@ export default function HomePage() {
                         });
                         const data = await response.json();
                         if (!response.ok) {
-                          alert(`Error posting to queue: ${data.error || "Unknown error"}\nTitle: ${sanitized}\nShift: ${keyShift}`);
+                          setStatus({ type: "error", message: `Error posting to queue: ${data.error || "Unknown error"} — Title: ${sanitized} / Shift: ${keyShift}` });
                           throw new Error(data.error || "Failed to create karaoke request");
                         }
                         // Immediately redirect to /payment with all required params

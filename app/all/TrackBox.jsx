@@ -84,14 +84,14 @@ export default function TrackBox({ t, ytImgUrl, onTitleClick, onKarClick, onVocC
       key={t.folder}
       ref={boxRef}
       style={{
-        background: "#0a2342", // dark blue
+        background: "#0a2342",
         color: "#fff",
         borderRadius: 8,
-        padding: 12,
+        padding: "10px 14px",
         minHeight: 40,
         boxShadow: "0 2px 8px #0001",
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "center",
         gap: 8,
         fontSize: 13,
         marginBottom: 8,
@@ -116,9 +116,9 @@ export default function TrackBox({ t, ytImgUrl, onTitleClick, onKarClick, onVocC
           textDecoration: "underline dotted",
           color: "#2196f3",
           direction: titleIsHebrew ? "rtl" : "ltr",
-          textAlign: titleIsHebrew ? "right" : "left",
+          textAlign: "center",
           flex: 1,
-          alignSelf: "flex-start",
+          alignSelf: "center",
           display: "inline-block",
           whiteSpace: "nowrap",
           overflow: "hidden",

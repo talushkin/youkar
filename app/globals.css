@@ -966,6 +966,20 @@ button:disabled {
   }
 }
 
+.all-tracks-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 640px) {
+  .all-tracks-grid {
+    grid-template-columns: 1fr;
+    width: 94% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
 @media (max-width: 560px) {
   .page-bg {
     display: flex;
